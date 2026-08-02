@@ -42,6 +42,11 @@ data class DetectedPerson(
  * detector is a single class, not a change to any caller here.
  */
 interface PersonDetector {
+    // TODO(REQ-23): no implementation exists, and BlurredVideoView is never
+    // called, so the "Blur people" toggle currently blurs nothing. The pipeline
+    // around this interface is complete and tested; only the model is missing.
+    // Until it lands the toggle must not present itself as on — see
+    // HARDENING.md H-12.
 
     /**
      * Load the model and warm the accelerator ahead of the first real frame.

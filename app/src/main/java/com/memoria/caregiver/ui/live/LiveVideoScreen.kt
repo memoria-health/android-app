@@ -39,6 +39,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.memoria.caregiver.data.livekit.cameraConnectivity
 import com.memoria.caregiver.data.model.Camera
 import com.memoria.caregiver.ui.cameras.SensorSymbol
 import com.memoria.caregiver.ui.cameras.plainClickable
@@ -342,7 +343,11 @@ private fun CameraTile(
     val track = identity?.let { state.videoTracksByIdentity[it] }
     val levels = talkWaveformLevels(state.audioLevels, identity)
     val isCallTarget = camera.id == state.selectedCameraId
-    val connectivity = liveConnectivity(camera, state.trackIdentities, state.roomConnected)
+    val connectivity = cameraConnectivity(
+        identity = identity,
+        state = state.connectionState,
+        hasVideoTrack = track != null,
+    )
     val shape = RoundedCornerShape(Radius.lg)
 
     Box(modifier) {

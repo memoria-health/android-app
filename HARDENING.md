@@ -224,4 +224,26 @@ back. Each screen draws its own because there is no shared top bar yet.
 
 ---
 
+## H-12 — The people-blur toggle currently blurs nothing
+**Phase 4 · found by review · BLOCKS the feature · REQ-23**
+
+`PersonDetector` is an interface with no implementation and `BlurredVideoView`
+is never called from any screen. Everything around it is real and tested — box
+maths, padding, hold and decay, the downscale-blur composition, I420→ARGB — but
+without a detector the pipeline never runs.
+
+**Failure guarded:** a caregiver turns on "Blur people" for a bedroom camera,
+the toggle shows on, and the video is not blurred. A privacy control that
+silently does nothing is worse than one that is visibly unavailable.
+
+**Fix:** vendor a detector (REQ-23) and wire it. **Until then the toggle must
+not claim to be on** — either hide it or show it disabled with a reason. That
+part is not blocked on the model and should not wait for it.
+
+This is the same shape as the avatar seam in DIFFERENCES.md D8, with one
+difference that made it worth a Critical: D8 was documented and this was not,
+so it would have shipped looking finished.
+
+---
+
 _(Append as work lands. Each entry names the failure it guards against.)_

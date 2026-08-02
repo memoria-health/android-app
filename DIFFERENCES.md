@@ -196,5 +196,28 @@ than to nothing. Tested.
 
 ---
 
+## D13 — Camera and microphone need an explicit runtime permission flow
+**Category:** platform mechanism differs
+**iOS:** declares `NSCameraUsageDescription` and `NSMicrophoneUsageDescription`
+in Info.plist, and the OS prompts the first time the app touches the hardware.
+The app writes no code for this.
+**Android:** needs three separate things — a `<uses-permission>` in the
+manifest, an explicit runtime request, and a check before every use. Missing any
+one makes the feature fail at the point of use.
+**Why it matters here:** before this landed there were **no permissions declared
+at all**, and `TalkController.startCall` went straight to
+`publishMicrophone(true)` while enrollment went straight to `bindToLifecycle`.
+Talk mode and face enrollment **could never have worked on a real device**, and
+every unit test still passed. That is the shape of defect both the suite and the
+emulator are blind to.
+**Deliberate:** the gate does NOT prompt on composition. The system dialog
+follows a deliberate action — tapping Talk, starting enrollment — because
+Android stops showing the dialog after a second refusal, and an app that
+ambushes someone on screen entry burns that budget for nothing.
+`android.hardware.camera` is declared `required="false"` so the app stays
+installable on a device without one; iOS does not gate installation either.
+
+---
+
 _(Add entries as they arise. Cosmetic gaps found in the Phase 8 screenshot pass
 go here too, each with a reason or a fix.)_

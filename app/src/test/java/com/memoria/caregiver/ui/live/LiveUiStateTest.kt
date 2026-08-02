@@ -2,6 +2,9 @@ package com.memoria.caregiver.ui.live
 
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.memoria.caregiver.data.livekit.CameraConnectivity
+import com.memoria.caregiver.data.livekit.LiveKitConnectionState
+import com.memoria.caregiver.data.livekit.cameraConnectivity
 import com.memoria.caregiver.data.model.Camera
 import com.memoria.caregiver.ui.theme.Danger
 import com.memoria.caregiver.ui.theme.Ink3
@@ -207,35 +210,27 @@ class LiveUiStateTest {
     // Tile chrome
     // -----------------------------------------------------------------------
 
-    @Test
-    fun `connectivity is unpaired without an identity, and room-down without a room`() {
-        assertEquals(
-            LiveConnectivity.Unpaired,
-            liveConnectivity(liveCamera(livekitIdentity = null), emptySet(), roomConnected = true),
-        )
-        assertEquals(
-            LiveConnectivity.RoomDown,
-            liveConnectivity(liveCamera(), setOf("cam_1a2b3c4d"), roomConnected = false),
-        )
-    }
-
     /**
-     * Connectivity deliberately does NOT consult `online`: the track map is the
-     * direct "video is flowing right now" signal and the backend column can lag
+     * The pill switches on the LiveKit client's fused `cameraConnectivity`, never
+     * on the raw signals, and never on the backend `online` column — the track map
+     * is the direct "video is flowing right now" evidence and the column can lag
      * it by about ten seconds.
      */
     @Test
-    fun `connectivity follows the track map, not the backend online flag`() {
-        val offlineButStreaming = liveCamera(livekitIdentity = "cam_aaaa", online = false)
-        val onlineButSilent = liveCamera(livekitIdentity = "cam_bbbb", online = true)
+    fun `the live pill follows the track map, not the backend online flag`() {
+        val onlineButSilent = liveCamera(online = true)
 
         assertEquals(
-            LiveConnectivity.Live,
-            liveConnectivity(offlineButStreaming, setOf("cam_aaaa"), roomConnected = true),
-        )
-        assertEquals(
-            LiveConnectivity.Offline,
-            liveConnectivity(onlineButSilent, emptySet(), roomConnected = true),
+            LiveStatePill.None,
+            statePill(
+                camera = onlineButSilent,
+                connectivity = cameraConnectivity(
+                    identity = onlineButSilent.livekitIdentity,
+                    state = LiveKitConnectionState.Connected,
+                    hasVideoTrack = false,
+                ),
+                callActive = false,
+            ),
         )
     }
 
@@ -245,7 +240,7 @@ class LiveUiStateTest {
      */
     @Test
     fun `the live pill reads ON AIR for every tile while a call is up`() {
-        val pill = statePill(liveCamera(), LiveConnectivity.Live, callActive = true)
+        val pill = statePill(liveCamera(), CameraConnectivity.LIVE, callActive = true)
 
         assertEquals(LiveStatePill.Live(onAir = true), pill)
     }
@@ -254,7 +249,7 @@ class LiveUiStateTest {
     fun `the live pill reads LIVE when no call is up`() {
         assertEquals(
             LiveStatePill.Live(onAir = false),
-            statePill(liveCamera(), LiveConnectivity.Live, callActive = false),
+            statePill(liveCamera(), CameraConnectivity.LIVE, callActive = false),
         )
     }
 
@@ -267,19 +262,19 @@ class LiveUiStateTest {
     fun `only the app-closed state earns a pill when a camera is not live`() {
         assertEquals(
             LiveStatePill.None,
-            statePill(liveCamera(), LiveConnectivity.RoomDown, callActive = false),
+            statePill(liveCamera(), CameraConnectivity.ROOM_DOWN, callActive = false),
         )
         assertEquals(
             LiveStatePill.None,
-            statePill(liveCamera(), LiveConnectivity.Joining, callActive = false),
+            statePill(liveCamera(), CameraConnectivity.JOINING, callActive = false),
         )
         assertEquals(
             LiveStatePill.None,
-            statePill(liveCamera(online = false), LiveConnectivity.Offline, callActive = false),
+            statePill(liveCamera(online = false), CameraConnectivity.OFFLINE, callActive = false),
         )
         assertEquals(
             LiveStatePill.AppClosed,
-            statePill(appClosedCamera(), LiveConnectivity.Offline, callActive = false),
+            statePill(appClosedCamera(), CameraConnectivity.OFFLINE, callActive = false),
         )
     }
 

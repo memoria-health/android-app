@@ -1,6 +1,36 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!--
+      iOS declares the equivalents as Info.plist usage descriptions
+      (NSCameraUsageDescription, NSMicrophoneUsageDescription) and the OS
+      prompts on first use. Android needs BOTH a manifest declaration and a
+      runtime request; a missing declaration makes the runtime request fail
+      silently, which is why neither talk mode nor enrollment worked before
+      this. See ui/permissions/.
+
+      INTERNET is normal-protection and granted at install; it is declared
+      because without it every request fails with a bare SecurityException that
+      reads like a network outage.
+    -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- Talk mode: publishing the caregiver's voice to the room. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!-- Face enrollment and the patient profile photo. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+
+    <!--
+      Declared NOT required so the app stays installable on a device with no
+      camera. Enrollment is one flow, not the product, and iOS does not gate
+      installation on a camera either.
+    -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.front" android:required="false" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
+
     <application
         android:allowBackup="false"
         android:icon="@android:drawable/sym_def_app_icon"

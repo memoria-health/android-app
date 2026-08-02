@@ -9,6 +9,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import com.memoria.caregiver.analytics.LocalAnalytics
 import com.memoria.caregiver.analytics.RecordingAnalytics
+import com.memoria.caregiver.data.livekit.LiveKitConnectionState
 import com.memoria.caregiver.data.model.Camera
 import com.memoria.caregiver.ui.theme.MemoriaTheme
 import org.junit.Assert.assertEquals
@@ -140,7 +141,7 @@ class LiveVideoScreenTest {
      */
     @Test
     fun `a live sensor offers disconnect, and the tap is reported`() {
-        val recorder = setUp(LiveVideoState(cameras = listOf(liveCamera()), roomConnected = true))
+        val recorder = setUp(LiveVideoState(cameras = listOf(liveCamera()), connectionState = LiveKitConnectionState.Connected))
 
         compose.onNodeWithText("Disconnect all sensors").performScrollTo().performClick()
 
@@ -220,7 +221,7 @@ class LiveVideoScreenTest {
             privacyEnabled = true,
             roomClass = Camera.RoomClass.BEDROOM,
         )
-        val recorder = setUp(LiveVideoState(cameras = listOf(camera), roomConnected = true))
+        val recorder = setUp(LiveVideoState(cameras = listOf(camera), connectionState = LiveKitConnectionState.Connected))
 
         compose.onNodeWithText("Bedroom is a private room").assertIsDisplayed()
         compose.onNodeWithContentDescription("Dismiss private-room notice for Bedroom")
@@ -254,7 +255,7 @@ class LiveVideoScreenTest {
         setUp(
             LiveVideoState(
                 cameras = listOf(liveCamera(room = "Bedroom", privacyEnabled = true)),
-                roomConnected = true,
+                connectionState = LiveKitConnectionState.Connected,
                 acknowledgedSensitiveRoomIds = setOf("cam-1"),
             ),
         )
@@ -271,7 +272,7 @@ class LiveVideoScreenTest {
         setUp(
             LiveVideoState(
                 cameras = listOf(liveCamera(room = "Bedroom", privacyEnabled = true)),
-                roomConnected = true,
+                connectionState = LiveKitConnectionState.Connected,
                 acknowledgedSensitiveRoomIds = setOf("cam-1"),
             ),
         )
@@ -285,7 +286,7 @@ class LiveVideoScreenTest {
         val recorder = setUp(
             LiveVideoState(
                 cameras = listOf(liveCamera(room = "Living room", livekitIdentity = "cam_aaaa")),
-                roomConnected = true,
+                connectionState = LiveKitConnectionState.Connected,
             ),
         )
 
@@ -299,7 +300,7 @@ class LiveVideoScreenTest {
         setUp(
             LiveVideoState(
                 cameras = listOf(liveCamera(room = "Living room", livekitIdentity = "cam_aaaa")),
-                roomConnected = true,
+                connectionState = LiveKitConnectionState.Connected,
                 audioEnabledIdentities = setOf("cam_aaaa"),
             ),
         )
@@ -310,7 +311,7 @@ class LiveVideoScreenTest {
     @Test
     fun `expanding a tile reports the camera`() {
         val recorder = setUp(
-            LiveVideoState(cameras = listOf(liveCamera(room = "Living room")), roomConnected = true),
+            LiveVideoState(cameras = listOf(liveCamera(room = "Living room")), connectionState = LiveKitConnectionState.Connected),
         )
 
         compose.onNodeWithContentDescription("Expand Living room").performClick()
@@ -323,7 +324,7 @@ class LiveVideoScreenTest {
         setUp(
             LiveVideoState(
                 cameras = listOf(liveCamera(aiPaused = true)),
-                roomConnected = true,
+                connectionState = LiveKitConnectionState.Connected,
                 videoTracksByIdentity = emptyMap(),
             ),
         )
@@ -335,7 +336,7 @@ class LiveVideoScreenTest {
     @Test
     fun `an idle tile carries its sensor number`() {
         setUp(
-            LiveVideoState(cameras = listOf(liveCamera(displayId = 9)), roomConnected = true),
+            LiveVideoState(cameras = listOf(liveCamera(displayId = 9)), connectionState = LiveKitConnectionState.Connected),
         )
 
         compose.onNodeWithText("SENSOR 09").assertIsDisplayed()
@@ -346,7 +347,7 @@ class LiveVideoScreenTest {
         setUp(
             LiveVideoState(
                 cameras = listOf(liveCamera(id = "cam-1")),
-                roomConnected = true,
+                connectionState = LiveKitConnectionState.Connected,
                 selectedCameraId = "cam-1",
                 talk = TalkUiState(TalkCallState.ACTIVE, callStartedAtMillis = 1_000_000L),
                 nowMillis = 1_000_000L + 65_000L,
@@ -363,7 +364,7 @@ class LiveVideoScreenTest {
         val recorder = setUp(
             LiveVideoState(
                 cameras = listOf(liveCamera(id = "cam-1")),
-                roomConnected = true,
+                connectionState = LiveKitConnectionState.Connected,
                 selectedCameraId = "cam-1",
             ),
         )
@@ -382,7 +383,7 @@ class LiveVideoScreenTest {
         setUp(
             LiveVideoState(
                 cameras = listOf(liveCamera(id = "cam-1", sourceType = Camera.SourceType.SENSOR)),
-                roomConnected = true,
+                connectionState = LiveKitConnectionState.Connected,
                 selectedCameraId = "cam-1",
             ),
         )
@@ -395,7 +396,7 @@ class LiveVideoScreenTest {
         setUp(
             LiveVideoState(
                 cameras = listOf(liveCamera(id = "cam-1", privacyEnabled = true)),
-                roomConnected = true,
+                connectionState = LiveKitConnectionState.Connected,
                 selectedCameraId = "cam-1",
                 acknowledgedSensitiveRoomIds = setOf("cam-1"),
             ),
@@ -413,7 +414,7 @@ class LiveVideoScreenTest {
         val recorder = setUp(
             LiveVideoState(
                 cameras = listOf(liveCamera(id = "cam-1")),
-                roomConnected = true,
+                connectionState = LiveKitConnectionState.Connected,
                 selectedCameraId = "cam-1",
                 talk = TalkUiState(TalkCallState.CONNECTING),
             ),
@@ -429,7 +430,7 @@ class LiveVideoScreenTest {
         setUp(
             LiveVideoState(
                 cameras = listOf(liveCamera(id = "cam-1")),
-                roomConnected = true,
+                connectionState = LiveKitConnectionState.Connected,
                 selectedCameraId = "cam-1",
                 talk = TalkUiState(TalkCallState.ACTIVE, callStartedAtMillis = 0L),
                 nowMillis = 0L,
@@ -450,7 +451,7 @@ class LiveVideoScreenTest {
         setUp(
             LiveVideoState(
                 cameras = listOf(liveCamera(id = "cam-1")),
-                roomConnected = true,
+                connectionState = LiveKitConnectionState.Connected,
                 selectedCameraId = "cam-1",
                 lkError = "Call failed: The network connection was lost.",
             ),
@@ -463,7 +464,7 @@ class LiveVideoScreenTest {
     /** Hard-false in release, so the button must not exist unless the flag is on. */
     @Test
     fun `the clip-capture trigger is absent unless the dev flag is on`() {
-        setUp(LiveVideoState(cameras = listOf(liveCamera(room = "Living room")), roomConnected = true))
+        setUp(LiveVideoState(cameras = listOf(liveCamera(room = "Living room")), connectionState = LiveKitConnectionState.Connected))
 
         compose.onNodeWithContentDescription("Capture 15-second clip from Living room")
             .assertDoesNotExist()
@@ -474,7 +475,7 @@ class LiveVideoScreenTest {
         val recorder = setUp(
             LiveVideoState(
                 cameras = listOf(liveCamera(id = "cam-1", room = "Living room")),
-                roomConnected = true,
+                connectionState = LiveKitConnectionState.Connected,
                 clipCaptureEnabled = true,
             ),
         )
@@ -490,7 +491,7 @@ class LiveVideoScreenTest {
         val recorder = setUp(
             LiveVideoState(
                 cameras = listOf(liveCamera(id = "cam-1", room = "Living room")),
-                roomConnected = true,
+                connectionState = LiveKitConnectionState.Connected,
                 clipCaptureEnabled = true,
                 capturingCameraId = "cam-1",
                 captureNote = LiveCaptureNote("cam-1", "Recording 15s — check the receiver"),
@@ -516,7 +517,7 @@ class LiveVideoScreenTest {
         val recorder = setUp(
             LiveVideoState(
                 cameras = listOf(liveCamera(id = "cam-1")),
-                roomConnected = true,
+                connectionState = LiveKitConnectionState.Connected,
                 selectedCameraId = null,
             ),
         )
@@ -534,7 +535,7 @@ class LiveVideoScreenTest {
                     liveCamera(id = "cam-1", livekitIdentity = "cam_aaaa"),
                     liveCamera(id = "cam-2", room = "Kitchen", livekitIdentity = "cam_bbbb"),
                 ),
-                roomConnected = true,
+                connectionState = LiveKitConnectionState.Connected,
                 selectedCameraId = "cam-1",
             ),
         )

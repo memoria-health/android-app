@@ -46,7 +46,10 @@ internal class DesyncReconciler {
     /**
      * One pass. Returns the LiveKit identities to re-subscribe, in camera order.
      *
-     * @param roomConnected only meaningful while actually in the room.
+     * @param roomConnected only meaningful while actually in the room. The host
+     *   passes `connectionState == LiveKitConnectionState.Connected`; it stays a
+     *   boolean here so this whole class can be exercised with no LiveKit types
+     *   on a plain JVM test classpath.
      * @param isTogglingMonitoring the bulk disconnect/reconnect PATCH is in
      *   flight, so intent is mid-change and a missing track is expected.
      * @param isReconnectingAll the reconnect-all loop owns recovery right now, so
