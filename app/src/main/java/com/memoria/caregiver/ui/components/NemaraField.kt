@@ -19,6 +19,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.semantics.password
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
@@ -100,16 +102,48 @@ fun NemaraField(
                     singleLine = true,
                     visualTransformation =
                         if (isSecure) PasswordVisualTransformation() else VisualTransformation.None,
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = keyboardType,
-                        capitalization = capitalization,
-                        // iOS relabels Return to "Done" and dismisses on submit,
-                        // rather than floating a toolbar above the keyboard.
-                        imeAction = ImeAction.Done,
-                        autoCorrectEnabled = keyboardType != KeyboardType.Email,
-                    ),
+                    // A secure field OVERRIDES whatever the call site asked for.
+                    //
+                    // iOS gets this free: SecureField suppresses autocorrect,
+                    // capitalization and the suggestion strip, and UIKit never
+                    // puts its contents in the keyboard's learned-words store.
+                    // Compose's BasicTextField does not — PasswordVisualTransformation
+                    // only masks the GLYPHS. Left as ordinary text input, Gboard
+                    // capitalizes the first character of a password, offers
+                    // corrections for it, and adds it to the personal dictionary,
+                    // where it survives the app being uninstalled.
+                    //
+                    // Enforced here rather than at each call site so a future
+                    // password field cannot be added without it. KeyboardType
+                    // .Password is what signals "do not learn this" to the IME.
+                    keyboardOptions = if (isSecure) {
+                        KeyboardOptions(
+                            keyboardType = KeyboardType.Password,
+                            capitalization = KeyboardCapitalization.None,
+                            imeAction = ImeAction.Done,
+                            autoCorrectEnabled = false,
+                        )
+                    } else {
+                        KeyboardOptions(
+                            keyboardType = keyboardType,
+                            capitalization = capitalization,
+                            // iOS relabels Return to "Done" and dismisses on
+                            // submit, rather than floating a toolbar above the
+                            // keyboard.
+                            imeAction = ImeAction.Done,
+                            autoCorrectEnabled = keyboardType != KeyboardType.Email,
+                        )
+                    },
                     keyboardActions = KeyboardActions(onDone = { keyboard?.hide() }),
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        // Marks the node as a password to the accessibility
+                        // tree. PasswordVisualTransformation masks the glyphs on
+                        // screen but leaves the RAW text in semantics, so
+                        // without this TalkBack reads the password aloud and any
+                        // accessibility service can harvest it. iOS's
+                        // SecureField is a password field to UIKit end to end.
+                        .then(if (isSecure) Modifier.semantics { password() } else Modifier),
                 )
             }
 

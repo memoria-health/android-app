@@ -148,4 +148,47 @@ sees for the same server response.
 
 ---
 
+## H-9 — The terms gate ships bricked: there are no PDFs
+**Phase 2 · found by review · effort: medium · BLOCKS SIGN-UP**
+
+`TermsGateScreen`'s `pageSource` defaults to `{ emptyList() }`, no PDF assets
+exist anywhere in the Android project, and the failure branch emits no
+end-of-document sentinel. So `canAccept` can never become true.
+
+**Failure guarded:** a caregiver who signs up cannot get past the consent gate,
+because the button that unblocks it only enables on scroll-to-end and there is
+nothing to scroll. This is not cosmetic — it is a dead end in the sign-up flow.
+
+**Fix:** vendor the placeholder PDFs iOS ships (version `2026-07-26-placeholder`,
+REQ-10) into assets, and make the failure branch reachable so a load error
+surfaces rather than silently disabling the button forever.
+
+---
+
+## H-10 — Screen analytics fire from inside screens, not from the nav host
+**Phase 2 · effort: small**
+
+Each auth screen calls `logScreen(...)` from its own `LaunchedEffect`, mirroring
+iOS's `.trackScreen()` modifier. It works, but it means a screen added without
+that line is silently untracked, and `forgot_password` is already missing.
+
+**Failure guarded:** funnel gaps that look like user behaviour rather than
+missing instrumentation.
+
+**Fix:** fire `logScreen` once from the navigation host on destination change,
+so tracking is structural.
+
+---
+
+## H-11 — Back chevrons drift 6dp between auth screens
+**Phase 2 · found by review · effort: small**
+
+The chevron on ForgotPassword sits 6dp right of the identical chevron on Login
+and SignUp, so it visibly jumps when a caregiver goes Login → Forgot password →
+back. Each screen draws its own because there is no shared top bar yet.
+
+**Fix:** one shared auth top bar, which also gives H-10 its home.
+
+---
+
 _(Append as work lands. Each entry names the failure it guards against.)_

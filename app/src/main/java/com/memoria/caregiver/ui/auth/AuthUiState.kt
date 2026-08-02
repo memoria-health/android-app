@@ -40,12 +40,37 @@ data class LoginState(
     val showPassword: Boolean = false,
     val form: AuthFormState = AuthFormState(),
 ) {
-    /** iOS gates the submit button on both fields being non-empty. */
+    /**
+     * `LoginView.swift:14`: `email.contains("@") && !password.isEmpty && !isAuthenticating`.
+     *
+     * `contains("@")`, NOT non-blank. An earlier draft of this file said
+     * non-blank, which would enable the button for "jane" where iOS keeps it
+     * disabled — a caregiver would tap submit and get a server error instead of
+     * an inert button. The porting agent caught it and reported rather than
+     * silently working around it.
+     *
+     * Deliberately NOT a real email validator: iOS accepts "@" and nothing more,
+     * so tightening it here would reject addresses iOS lets through.
+     */
     val canSubmit: Boolean
-        get() = email.isNotBlank() && password.isNotBlank() && !form.isBusy
+        get() = email.contains("@") && password.isNotEmpty() && !form.isBusy
 }
 
-/** Sign up. iOS: `SignUpView`. */
+/**
+ * Sign up. iOS: `SignUpView`.
+ *
+ * **`confirmPassword` is deliberately NOT here.** iOS keeps it in `@State` on
+ * the view, never sends it anywhere, and uses it only to gate the button — so
+ * hoisting it would put a second copy of a password in a longer-lived object
+ * for no gain. `SignUpScreen` owns it, and `signUpCanSubmit(state, confirm)`
+ * combines the two.
+ *
+ * The submit gate lives with it in the screen for the same reason: one
+ * expression, one place. `SignUpView.swift:20-45` gates on name non-blank,
+ * email containing "@", at least 10 phone digits after stripping non-digits
+ * (required, so support can text back), all five password rules, a non-empty
+ * matching confirmation, and accepted terms.
+ */
 data class SignUpState(
     val displayName: String = "",
     val email: String = "",
