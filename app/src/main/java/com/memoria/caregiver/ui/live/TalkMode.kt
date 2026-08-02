@@ -5,9 +5,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.memoria.caregiver.data.model.Camera
 import com.memoria.caregiver.data.remote.ApiError
-import com.twilio.audioswitch.AudioDevice
-import io.livekit.android.audio.AudioHandler
-import io.livekit.android.audio.AudioSwitchHandler
 import java.util.Locale
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
@@ -46,7 +43,7 @@ import kotlinx.coroutines.withContext
  * on the backend's `set_talk_active` packet and not on our publish grant. That
  * is why [TalkController] never connects, disconnects, or re-mints anything: the
  * connection is already there and holding broadcaster grants before the call
- * button is ever tapped. See [LiveKitTokens].
+ * button is ever tapped. See `LiveKitIdentity`.
  *
  * ## Threading
  *
@@ -198,112 +195,28 @@ object AndroidTalkLog : TalkLog {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Audio routing — the loudspeaker guarantee
-// ---------------------------------------------------------------------------
-
-/**
- * Forces call audio out of the **loudspeaker** when the mic goes live.
- *
- * This exists because of a specific failure. On iOS, publishing the mic flips
- * the SDK's `AVAudioSession` to `.playAndRecord` / `.voiceChat`, whose default
- * output is the **earpiece** — so without an override the caregiver has to hold
- * the phone to their ear to hear a room they are trying to listen to across the
- * house. iOS calls `overrideOutputAudioPort(.speaker)` immediately after
- * enabling the mic. Android reaches the same routing decision by a different
- * mechanism, and if it is left implicit the symptom on Android is "Talk lost
- * audio", which reads as a LiveKit or a network problem and is a
- * wrong-diagnosis magnet.
- *
- * **There is no restore.** iOS does not restore either: when the mic is
- * disabled the SDK reverts the session to `.playback`, which routes to the
- * loudspeaker anyway. Restoring an earpiece route after a call would send the
- * audio of a passively-unmuted tile to the earpiece, which is the bug this type
- * exists to prevent, one step later.
- */
-interface TalkAudioRoute {
-    fun forceLoudspeaker()
-
-    /** For tests and for a client built without an [AudioSwitchHandler]. */
-    object None : TalkAudioRoute {
-        override fun forceLoudspeaker() = Unit
-    }
-}
-
-/**
- * [TalkAudioRoute] over the LiveKit SDK's own routing handler.
- *
- * `livekit-android` installs an [AudioSwitchHandler] by default and starts it
- * when the room reaches `CONNECTED`, in `MODE_IN_COMMUNICATION`. Its default
- * preference order is bluetooth, wired, **speakerphone, earpiece** — so the
- * loudspeaker already wins today. This class is the explicit guarantee, not a
- * fix: `preferredDeviceList` is a mutable property, a future change to it (or a
- * client constructed with a different handler) would silently reintroduce the
- * exact iOS failure, and nothing else in the app would notice.
- *
- * Pass `room.audioHandler`. A handler that is not an [AudioSwitchHandler] makes
- * every call a no-op rather than a crash, because routing is a comfort
- * behaviour and must never take the call down with it.
- *
- * A wired or bluetooth headset is left alone: it is not the earpiece, so it is
- * not the failure being guarded against, and a caregiver who put a headset on
- * did so on purpose.
- */
-class AudioSwitchTalkAudioRoute(private val audioHandler: AudioHandler?) : TalkAudioRoute {
-
-    override fun forceLoudspeaker() {
-        val handler = audioHandler as? AudioSwitchHandler ?: return
-        val current = handler.selectedAudioDevice
-        val alreadyAudibleAcrossTheRoom = current is AudioDevice.Speakerphone ||
-            current is AudioDevice.WiredHeadset ||
-            current is AudioDevice.BluetoothHeadset
-        if (alreadyAudibleAcrossTheRoom) return
-        val speaker = handler.availableAudioDevices
-            .firstOrNull { it is AudioDevice.Speakerphone }
-            ?: return
-        handler.selectDevice(speaker)
-    }
-}
+// Audio routing — the loudspeaker guarantee — is NOT here.
+//
+// It lives in data/livekit/AudioRouting.kt, applied by LiveKitClient the moment
+// the microphone is published. Two implementations used to exist: this layer's,
+// which had the correct headset rule and was never wired, and the client's,
+// which was wired and lacked it. Enforcing the invariant where the mic is
+// actually published is what makes it impossible to forget at wiring time.
+// See FINDINGS.md F-1 and DECISIONS.md D-014.
 
 // ---------------------------------------------------------------------------
 // The broadcaster token
 // ---------------------------------------------------------------------------
 
-/**
- * Room name, participant identity and role for `POST /v1/livekit/token`.
- *
- * The Live tab mints the **broadcaster** role on connect, before any call, so
- * that starting one is a mic toggle instead of a reconnect (see the file
- * header). [VIEWER_ROLE] is carried because iOS carries both.
- */
-object LiveKitTokens {
-
-    /** Subscribe only. `mintViewerToken`. */
-    const val VIEWER_ROLE: String = "viewer"
-
-    /** Subscribe plus `canPublish = true`, so the mic can go live. `mintBroadcasterToken`. */
-    const val BROADCASTER_ROLE: String = "broadcaster"
-
-    /** `"patient_\(pid.uuidString.lowercased())"`. */
-    fun roomName(patientId: String): String = "patient_${patientId.lowercase(Locale.ROOT)}"
-
-    /**
-     * `"caregiver_<uuid>_android"`.
-     *
-     * **The suffix is load-bearing** (PARITY.md §29, item 1). LiveKit treats
-     * `identity` as a unique participant key per room and kicks the older
-     * session when a second client connects with the same one. Web uses
-     * `_web`, the iOS app uses `_ios`; if Android reused `_ios` it would
-     * silently disconnect the caregiver's own iPhone from the stream every time
-     * they opened the Android app, and the iPhone would look like it had a
-     * network fault.
-     *
-     * The server validates the prefix and re-mints, so this value is
-     * informational to the backend and load-bearing to LiveKit.
-     */
-    fun caregiverIdentity(caregiverId: String): String =
-        "caregiver_${caregiverId.lowercase(Locale.ROOT)}_android"
-}
+// The room name, the participant identity and the two role strings for
+// `POST /v1/livekit/token` all live in ONE place:
+// data/livekit/LiveKitIdentity.kt.
+//
+// A second copy used to live here. Both agreed, and that is precisely the
+// problem: the `_android` suffix is the highest-consequence string in the port
+// (PARITY.md §29 item 1) — the wrong one silently kicks the caregiver's own
+// iPhone off the live stream — and a value like that gets exactly one
+// definition, not two that happen to match today.
 
 // ---------------------------------------------------------------------------
 // Product copy
@@ -474,7 +387,6 @@ class TalkController(
     private val patientId: String,
     private val api: TalkApi,
     private val media: TalkMedia,
-    private val audioRoute: TalkAudioRoute = TalkAudioRoute.None,
     private val errors: TalkErrorSink = TalkErrorSink { },
     private val log: TalkLog = TalkLog { },
     private val now: () -> Long = { System.currentTimeMillis() },
@@ -515,9 +427,10 @@ class TalkController(
         )
         try {
             media.publishMicrophone(true)
-            // Immediately after the mic goes live, exactly where iOS forces
-            // `.speaker`. See TalkAudioRoute.
-            audioRoute.forceLoudspeaker()
+            // The loudspeaker override that iOS does here fires inside
+            // LiveKitClient the instant the mic is published, so it cannot be
+            // skipped by a caller that forgot to pass a route. See
+            // data/livekit/AudioRouting.kt.
             // Unmute the target's remote audio so the caregiver hears the wall
             // phone and the level renderer starts firing for the waveform.
             // Everything else stays muted.

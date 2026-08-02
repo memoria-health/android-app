@@ -387,19 +387,34 @@ class LiveKitClient(
      *
      * Releasing the choice on disable hands routing back to automatic
      * selection, which is what iOS gets for free when the session reverts.
+     *
+     * **A headset is left alone.** A wired or bluetooth headset is not the
+     * earpiece, so it is not the failure this guards against, and a caregiver
+     * who put one on did so deliberately — overriding them would throw a
+     * private conversation about someone's parent onto a loudspeaker in
+     * public. This rule lived in a second implementation
+     * (`AudioSwitchTalkAudioRoute`) that was never wired, while this one, which
+     * lacked it, was. See FINDINGS.md F-1.
+     *
+     * This is the single routing implementation, and it lives here rather than
+     * in the talk layer because here it cannot be forgotten: every path that
+     * publishes the mic goes through [setMicrophoneEnabled]. Recorded as
+     * DECISIONS.md D-014.
      */
     private fun routeAudioForMicrophone(enable: Boolean) {
         val handler = room.audioSwitchHandler ?: return
-        if (enable) {
-            val speaker = handler.availableAudioDevices.firstOrNull { it is AudioDevice.Speakerphone }
-            if (speaker == null) {
-                log.debug("[LiveKit] no speakerphone device available; leaving routing alone")
-                return
-            }
-            handler.selectDevice(speaker)
-        } else {
+        if (!enable) {
             handler.selectDevice(null)
+            return
         }
+        if (!shouldForceSpeakerphone(audioRouteKind(handler.selectedAudioDevice))) return
+
+        val speaker = handler.availableAudioDevices.firstOrNull { it is AudioDevice.Speakerphone }
+        if (speaker == null) {
+            log.debug("[LiveKit] no speakerphone device available; leaving routing alone")
+            return
+        }
+        handler.selectDevice(speaker)
     }
 
     // ---- Track lifecycle ----

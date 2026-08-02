@@ -1,5 +1,7 @@
 package com.memoria.caregiver.data.livekit
 
+import java.util.Locale
+
 /**
  * The LiveKit participant identity and room name this app connects as.
  *
@@ -45,12 +47,18 @@ object LiveKitIdentity {
      * lowercase form.
      */
     fun caregiverIdentity(caregiverId: String): String =
-        "caregiver_${caregiverId.lowercase()}$PLATFORM_SUFFIX"
+        "caregiver_${caregiverId.lowercase(Locale.ROOT)}$PLATFORM_SUFFIX"
 
     /**
      * `patient_<uuid>` — the room name. One room per patient; every camera in
      * the household publishes into it, and the caregiver views one room at a
      * time.
      */
-    fun roomName(patientId: String): String = "patient_${patientId.lowercase()}"
+    fun roomName(patientId: String): String = "patient_${patientId.lowercase(Locale.ROOT)}"
+
+    /** Subscribe only. iOS `mintViewerToken`. */
+    const val VIEWER_ROLE: String = "viewer"
+
+    /** Subscribe plus `canPublish = true`, so the mic can go live. iOS `mintBroadcasterToken`. */
+    const val BROADCASTER_ROLE: String = "broadcaster"
 }

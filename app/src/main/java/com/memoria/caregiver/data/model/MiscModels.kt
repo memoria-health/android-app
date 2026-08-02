@@ -2,24 +2,9 @@ package com.memoria.caregiver.data.model
 
 import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.ExperimentalSerializationApi
-import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import com.memoria.caregiver.data.remote.NemaraInstantSerializer
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.SerializationException
-import kotlinx.serialization.descriptors.PrimitiveKind
-import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
-import kotlinx.serialization.descriptors.SerialDescriptor
-import kotlinx.serialization.encoding.Decoder
-import kotlinx.serialization.encoding.Encoder
-import java.time.LocalDate
-import java.time.OffsetDateTime
-import java.time.ZoneOffset
-import java.time.format.DateTimeFormatter
-import java.time.format.DateTimeFormatterBuilder
-import java.time.format.DateTimeParseException
-import java.time.temporal.ChronoField
-import java.util.Locale
 import kotlin.time.Instant
 
 /*
@@ -49,72 +34,12 @@ import kotlin.time.Instant
 // ---------------------------------------------------------------------------
 // Timestamps
 // ---------------------------------------------------------------------------
-
-/**
- * Encode target: exactly 6 fraction digits, matching pydantic's own output, so
- * decode(encode(value)) is byte-stable. Carries the UTC override because it
- * formats a `java.time.Instant`, which has no zone of its own.
- */
-private val MICROSECOND_ISO8601: DateTimeFormatter = DateTimeFormatterBuilder()
-    .appendPattern("uuuu-MM-dd'T'HH:mm:ss")
-    .appendFraction(ChronoField.NANO_OF_SECOND, 6, 6, true)
-    .appendPattern("XXXXX")
-    .toFormatter(Locale.US)
-    .withZone(ZoneOffset.UTC)
-
-/** Parse slot 1: fractional seconds present, any width ICU would have accepted. */
-private val FRACTIONAL_ISO8601: DateTimeFormatter = DateTimeFormatterBuilder()
-    .appendPattern("uuuu-MM-dd'T'HH:mm:ss")
-    .appendFraction(ChronoField.NANO_OF_SECOND, 1, 9, true)
-    .appendPattern("XXXXX")
-    .toFormatter(Locale.US)
-
-/** Parse slot 2: no fractional part. */
-private val PLAIN_ISO8601: DateTimeFormatter =
-    DateTimeFormatter.ofPattern("uuuu-MM-dd'T'HH:mm:ssXXXXX", Locale.US)
-
-/** Parse slot 3: Postgres `DATE` columns, resolved to midnight UTC as Swift does. */
-private val DATE_ONLY: DateTimeFormatter =
-    DateTimeFormatter.ofPattern("uuuu-MM-dd", Locale.US)
-
-/** Tried in order; each carries its own offset, so no zone override is set. */
-private val OFFSET_PARSERS: List<DateTimeFormatter> = listOf(FRACTIONAL_ISO8601, PLAIN_ISO8601)
-
-/**
- * Backend timestamp codec. Mirrors `Networking/JSONCoders.swift` and
- * `PARITY.md §6`.
- *
- * Pydantic v2 emits `datetime` as ISO-8601 with 6-digit microseconds
- * (`2026-05-21T22:18:00.182734+00:00`) and `date` as `YYYY-MM-DD`. Swift tries
- * four `DateFormatter` patterns in order, all pinned to `en_US_POSIX` and UTC:
- *
- *   1. `yyyy-MM-dd'T'HH:mm:ss.SSSSSSXXXXX`  (microseconds — also the encode format)
- *   2. `yyyy-MM-dd'T'HH:mm:ss.SSSXXXXX`     (milliseconds)
- *   3. `yyyy-MM-dd'T'HH:mm:ssXXXXX`         (no fractional part)
- *   4. `yyyy-MM-dd`                          (date only)
- *
- * Swift's slots 1 and 2 collapse into one parser here, and that is deliberate.
- * ICU, which backs `DateFormatter`, treats the fractional-second field as
- * variable width when parsing, so pattern 1 on iOS already accepts any number of
- * fraction digits and slot 2 only ever matters for output. `java.time` counts
- * pattern letters as an exact width, so a literal translation would reject a
- * timestamp whose fraction is not exactly 6 or exactly 3 digits — and Postgres
- * trims trailing zeros, so `…:00.18+00:00` is a shape that can reach the client
- * through Supabase Realtime. One parser accepting 1-9 fraction digits reproduces
- * what iOS actually does; encoding still writes exactly 6.
- *
- * `uuuu` rather than `yyyy` because `yyyy` is year-of-era and needs an era field
- * to resolve; `uuuu` is the proleptic year and needs nothing.
- *
- * `internal`, not private, because this is the whole app's timestamp codec and
- * belongs with the shared JSON configuration once that module exists. It lives
- * here only because this was the first unit that needed it.
- */
-// The date wire format lives in ONE place: data/remote/JsonCoders.kt.
-// MiscInstantSerializer was a second copy written in parallel with it; the two
-// disagreed on sub-millisecond precision and on the encoded string, so the same
-// wire value decoded differently depending on which model file it landed in.
-// Deleted in favour of the shared serializer.
+//
+// There is no date codec here. The wire format lives in ONE place:
+// data/remote/JsonCoders.kt (NemaraInstantSerializer). A second copy written in
+// parallel with it disagreed on sub-millisecond precision and on the encoded
+// string, so the same wire value decoded differently depending on which model
+// file it landed in. Deleted, along with the formatters it used.
 
 
 // ---------------------------------------------------------------------------

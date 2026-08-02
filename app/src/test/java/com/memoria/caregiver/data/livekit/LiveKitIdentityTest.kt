@@ -4,6 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.Locale
 
 /**
  * The highest-consequence string in the port.
@@ -62,5 +63,36 @@ class LiveKitIdentityTest {
             "patient_11111111-2222-3333-4444-555555555555",
             LiveKitIdentity.roomName("11111111-2222-3333-4444-555555555555".uppercase()),
         )
+    }
+
+    /**
+     * The Live tab mints **broadcaster** on connect, before any call, so
+     * starting one is a mic toggle rather than a reconnect. `viewer` is carried
+     * because iOS carries both.
+     */
+    @Test
+    fun `the two token roles are the strings the backend accepts`() {
+        assertEquals("broadcaster", LiveKitIdentity.BROADCASTER_ROLE)
+        assertEquals("viewer", LiveKitIdentity.VIEWER_ROLE)
+    }
+
+    /**
+     * Lowercasing is locale-sensitive in Kotlin unless a locale is named. Hex
+     * UUIDs contain no `I`, so the Turkish dotless-i mapping cannot bite a
+     * well-formed id today — this pins the guarantee for anything that is not
+     * one, rather than relying on the caller's device locale.
+     */
+    @Test
+    fun `lowercasing does not depend on the device locale`() {
+        val previous = Locale.getDefault()
+        try {
+            Locale.setDefault(Locale.forLanguageTag("tr-TR"))
+            assertEquals(
+                "caregiver_ii11-2222_android",
+                LiveKitIdentity.caregiverIdentity("II11-2222"),
+            )
+        } finally {
+            Locale.setDefault(previous)
+        }
     }
 }

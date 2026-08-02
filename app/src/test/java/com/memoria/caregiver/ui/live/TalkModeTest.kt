@@ -92,12 +92,6 @@ class TalkModeTest {
             }
         }
 
-        val route = object : TalkAudioRoute {
-            override fun forceLoudspeaker() {
-                events += "forceLoudspeaker"
-            }
-        }
-
         val errors = TalkErrorSink {
             errorMessage = it
             errorWrites++
@@ -110,7 +104,6 @@ class TalkModeTest {
             patientId = PATIENT,
             api = api,
             media = media,
-            audioRoute = route,
             errors = errors,
             log = TalkLog { events += "log($it)" },
             now = { nowMillis },
@@ -132,7 +125,6 @@ class TalkModeTest {
             assertEquals(
                 listOf(
                     "publishMicrophone(true)",
-                    "forceLoudspeaker",
                     "setRemoteAudioPlayback(cam_1a2b3c4d)",
                     "startTalk($PATIENT,cam-1)",
                     "error(null)",
@@ -143,23 +135,11 @@ class TalkModeTest {
             assertEquals(h.nowMillis, c.state.value.callStartedAtMillis!!)
         }
 
-    /**
-     * The regression this whole unit exists to prevent. Publishing the mic puts
-     * the device in communication mode, whose default output is the earpiece;
-     * without the override the caregiver hears nothing across the room and it
-     * looks like a LiveKit fault.
-     */
-    @Test
-    fun `startCall forces the loudspeaker immediately after the mic goes live`() = runTest {
-        val h = Harness()
-
-        h.controller().startCall(camera())
-
-        val mic = h.events.indexOf("publishMicrophone(true)")
-        val speaker = h.events.indexOf("forceLoudspeaker")
-        assertTrue("mic publish must be recorded", mic >= 0)
-        assertEquals("loudspeaker override must directly follow the mic publish", mic + 1, speaker)
-    }
+    // The loudspeaker override used to be sequenced here, against a fake route
+    // this controller called itself. It now fires inside LiveKitClient on mic
+    // publish, so ordering against `publishMicrophone` is no longer something
+    // this unit can observe — it is guaranteed by construction instead, which
+    // is the point of the move. The rule is pinned by AudioRoutingTest.
 
     @Test
     fun `startCall moves to CONNECTING before any of the work completes`() = runTest {
@@ -223,7 +203,6 @@ class TalkModeTest {
             assertEquals(
                 listOf(
                     "publishMicrophone(true)",
-                    "forceLoudspeaker",
                     "setRemoteAudioPlayback(cam_1a2b3c4d)",
                     "startTalk($PATIENT,cam-1)",
                     "publishMicrophone(false)",
@@ -809,42 +788,20 @@ class TalkModeTest {
     // The token
     // -----------------------------------------------------------------------
 
-    /**
-     * PARITY.md §29 item 1. Reusing `_ios` here would kick the caregiver's own
-     * iPhone off the stream every time they opened the Android app, and the
-     * iPhone would look like it had a network fault.
-     */
-    @Test
-    fun `the caregiver identity is suffixed android and lowercased`() {
-        assertEquals(
-            "caregiver_9f8b7c6d-0000-4000-8000-000000000001_android",
-            LiveKitTokens.caregiverIdentity("9F8B7C6D-0000-4000-8000-000000000001"),
-        )
-    }
-
-    @Test
-    fun `the room is the patient's own lowercased room`() {
-        assertEquals(
-            "patient_9f8b7c6d-0000-4000-8000-000000000001",
-            LiveKitTokens.roomName("9F8B7C6D-0000-4000-8000-000000000001"),
-        )
-    }
-
-    @Test
-    fun `the live tab mints the broadcaster role`() {
-        assertEquals("broadcaster", LiveKitTokens.BROADCASTER_ROLE)
-        assertEquals("viewer", LiveKitTokens.VIEWER_ROLE)
-    }
+    // The identity, room and role strings are pinned by LiveKitIdentityTest,
+    // which is where the single definition of them now lives. Three tests here
+    // asserted the same values against a second copy; both the copy and these
+    // went away together.
 
     // -----------------------------------------------------------------------
     // Audio route
     // -----------------------------------------------------------------------
 
-    @Test
-    fun `a client with no audio-switch handler routes without crashing`() {
-        AudioSwitchTalkAudioRoute(audioHandler = null).forceLoudspeaker()
-        TalkAudioRoute.None.forceLoudspeaker()
-    }
+    // The loudspeaker rule moved to data/livekit/AudioRouting.kt, where it is
+    // applied on mic publish and pinned by AudioRoutingTest. The test that
+    // stood here only asserted that a null handler did not crash; it never
+    // covered the headset rule, which is the part that can be wrong in a way a
+    // caregiver notices.
 
     private companion object {
         const val PATIENT = "pat-1"

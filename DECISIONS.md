@@ -235,4 +235,37 @@ to satisfy a redundant suite.
 
 ---
 
+## D-014 — The loudspeaker rule is enforced at mic publish, not in the talk layer
+**Date:** 2026-08-02 · **Reversal cost:** small (move one call and one file)
+
+Two implementations of the loudspeaker override existed (`FINDINGS.md` F-1).
+They disagreed on the headset case, and **the one with the correct rule was the
+one that never ran**: `TalkController`'s `audioRoute` parameter defaulted to
+`TalkAudioRoute.None` and nothing in `main` ever passed anything else.
+
+iOS puts the override in the talk path, so literal parity would keep it in
+`TalkController`. **Rejected**, because the iOS structure carries an assumption
+Android does not honour: on iOS there is exactly one way to publish the mic. Here
+the collaborator is injected and defaultable, and it defaulted to doing nothing
+for the entire life of the code. A privacy-adjacent invariant that a caller can
+forget to pass is one that will be forgotten.
+
+**Decided:** one implementation, in `LiveKitClient.setMicrophoneEnabled`, which
+every mic publish goes through. The decision itself is extracted to
+`data/livekit/AudioRouting.kt` as a pure function so it stays JVM-testable once
+it sits behind a live `Room` — the SDK calls live in the client, the judgement
+lives in the tested function.
+
+The rule that survived is the headset-aware one: a wired or bluetooth headset is
+left alone. Overriding it would put a conversation about someone's parent on a
+loudspeaker in public, which is a worse failure than the earpiece bug the
+override exists to fix.
+
+**Cost, stated plainly:** `TalkController` can no longer observe the ordering of
+mic-publish and route-change, and one test that asserted it was deleted rather
+than rewritten. That ordering is now guaranteed by construction — the same
+statement performs both — which is why the test had nothing left to assert.
+
+---
+
 _(Append as decisions are made. Never delete; mark REVERSED with the date.)_
