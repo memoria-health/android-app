@@ -41,6 +41,12 @@
       Aryaman directed (2026-08-01) not to block on go-aheads, so Phase 1 may start;
       read §29 "the ten things most likely to be ported wrong" first.
 
+> **Sequencing (settled 2026-08-01):** phases 1-8 below, as originally planned.
+> A two-track restructure was drafted and reverted at Aryaman's direction —
+> execute the plan, do not re-plan it. Requirements parked along the way live in
+> `REQUIREMENTS.md`, referenced as `REQ-n` at the call site so a deferral cannot
+> be silently forgotten.
+
 ## Phase 1 — scaffold + design system
 
 - [ ] Gradle project, version catalog, module layout.
