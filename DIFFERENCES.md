@@ -117,5 +117,66 @@ output during the Phase 4 screenshot pass.
 
 ---
 
+## D8 — Avatar photos load through an injected renderer, not a built-in
+**Category:** platform mechanism differs
+**iOS:** `NemaraAvatar` uses `AsyncImage(url:)`, which SwiftUI provides for free.
+**Android:** a `LocalAvatarPhoto` CompositionLocal the app root provides.
+**Why:** Compose has no URL image loader. The alternatives were to add Coil to
+the design-system layer — a dependency nothing else needs, which is the "for
+later" pattern `HARNESS.md §3` rejects — or to inject the renderer. Injected.
+**Status:** the seam has **no provider yet**, so photos do not render and every
+avatar shows its serif initial. That is the `.empty`/`.failure` branch of the
+Swift `AsyncImage`, so it degrades exactly as iOS does while loading — but it
+must be wired before any screen shows a real patient. Tracked as REQ-22.
+
+---
+
+## D9 — Country picker chrome is rebuilt, not inherited
+**Category:** platform mechanism differs
+**iOS:** `.searchable()`, `.navigationTitle()`, `.listStyle(.plain)` — four
+declarative lines, and UIKit supplies the search field, nav bar and separators.
+**Android:** the search field, nav bar, row insets and separators are drawn
+explicitly, introducing about fifteen constants with no counterpart in the Swift.
+**Why:** Compose has no `.searchable`. The chrome has to come from somewhere;
+material3's `SearchBar` brings its own shape, elevation and color roles, which is
+the same reason `NemaraButton` avoids `Button`.
+**Known consequence:** those fifteen constants are **judgement, not ported
+values**, so this screen is more likely than any other to drift visually from
+iOS. It needs the screenshot pass more than the rest.
+
+---
+
+## D10 — Country rows use Inter, where iOS falls back to the system font
+**Category:** deliberate, and it goes against literal parity
+**iOS:** `CountryPicker.swift:62` sets **no** font on the sheet rows, so they
+render in SF Pro at List body size. The trigger row three lines earlier *does*
+specify `NemaraFont.bodyLarge`, so the omission looks deliberate — on iOS the
+system font in a system List is invisible-by-convention.
+**Android:** rows use `NemaraType.bodyLarge` (Inter 16).
+**Why:** the literal port would be Roboto, because that is Android's system font.
+A Roboto list inside an Inter app does not read as "matching iOS", it reads as a
+bug. The *intent* — "this list looks native" — is preserved by using the app's
+own body font.
+**This is the one place in the port where intent parity beat literal parity**,
+and it is recorded here precisely because the rule says that normally is not
+allowed. If the screenshot pass shows it reading wrong, revert to the literal.
+
+---
+
+## D11 — The brand mark uses a circular corner, not Apple's continuous curve
+**Category:** platform mechanism differs
+**iOS:** `RoundedRectangle(cornerRadius: size * 0.2237, style: .continuous)` —
+the app-icon squircle.
+**Android:** `RoundedCornerShape` with the identical 0.2237 radius, which is a
+circular arc.
+**Why:** Compose foundation has no continuous-curvature shape. A hand-rolled
+partial squircle would be an approximation that is hard to review and easy to get
+subtly wrong; an exact radius with the platform's curvature is the honest
+trade.
+**Where it shows:** negligible at the real call sites (20-56dp); most visible at
+large sizes, which the app does not use.
+
+---
+
 _(Add entries as they arise. Cosmetic gaps found in the Phase 8 screenshot pass
 go here too, each with a reason or a fix.)_
