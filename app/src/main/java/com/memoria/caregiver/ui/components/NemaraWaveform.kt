@@ -188,7 +188,15 @@ fun NemaraWaveform(
     // interruption behavior SwiftUI has anyway. The effect body runs in the same
     // frame as the composition that triggered it and before the draw pass, so
     // the bars never render a frame behind the levels they were given.
-    LaunchedEffect(target) {
+    // Keyed on the CONTENT, not the array instance. `target` is a FloatArray
+    // returned fresh from waveformFractions on every composition, and Compose
+    // compares keys with ==, which for arrays is referential identity — so
+    // keying on it restarts the effect on EVERY recomposition, including ones
+    // where the levels did not change, cutting an in-flight animation short.
+    // SwiftUI supersedes an animation only when the animated value changes.
+    // toList() gives structural equality, so the effect restarts exactly when
+    // the bar heights actually differ.
+    LaunchedEffect(target.toList()) {
         val countChanged = displayed.size != lastCount.value
         lastCount.value = displayed.size
         if (countChanged) {

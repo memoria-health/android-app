@@ -36,7 +36,11 @@ tree. Cheap once the pattern exists — `NemaraButtonTest` is the template.
 ---
 
 ## H-2 — Waveform animation truncates on any recomposition
-**Phase 1 · found by review · effort: small**
+**Phase 1 · FIXED 2026-08-02** — keyed on `target.toList()` (structural) instead
+of the `FloatArray` instance (referential). Two tests pin it: equal level sets
+now produce equal keys, different ones do not.
+
+**Original entry, for the record:**
 
 `NemaraWaveform`'s `LaunchedEffect` is keyed on a freshly-allocated `FloatArray`.
 Compose compares keys with `==`, which for arrays is referential identity, so
@@ -149,7 +153,20 @@ sees for the same server response.
 ---
 
 ## H-9 — The terms gate ships bricked: there are no PDFs
-**Phase 2 · found by review · effort: medium · BLOCKS SIGN-UP**
+**Phase 2 · FIXED 2026-08-02**
+
+Fixed: the two placeholder PDFs iOS ships are vendored to
+`app/src/main/assets/legal/`, and `PdfPageLoader` rasterises them with
+`PdfRenderer`. The asset is copied to the cache directory first because
+`PdfRenderer` needs a seekable file and an asset stream is not one. A load
+failure returns an empty list, which is the screen's existing "could not load"
+branch, so a bad document shows an error rather than crashing sign-up.
+
+Still open in the ORIGINAL sense: these are placeholders (version
+`2026-07-26-placeholder`), and the real Veritas documents must replace them on
+both platforms together — REQ-10.
+
+**Original entry, for the record:**
 
 `TermsGateScreen`'s `pageSource` defaults to `{ emptyList() }`, no PDF assets
 exist anywhere in the Android project, and the failure branch emits no
@@ -166,7 +183,9 @@ surfaces rather than silently disabling the button forever.
 ---
 
 ## H-10 — Screen analytics fire from inside screens, not from the nav host
-**Phase 2 · effort: small**
+**Phase 2 · PARTIALLY FIXED 2026-08-02** — the missing `forgot_password` event
+is now fired. The structural problem stands: tracking still lives in each
+screen, so a screen added without the line is silently untracked.
 
 Each auth screen calls `logScreen(...)` from its own `LaunchedEffect`, mirroring
 iOS's `.trackScreen()` modifier. It works, but it means a screen added without
@@ -181,7 +200,9 @@ so tracking is structural.
 ---
 
 ## H-11 — Back chevrons drift 6dp between auth screens
-**Phase 2 · found by review · effort: small**
+**Phase 2 · FIXED 2026-08-02** — ForgotPassword used `Spacing.xs` (8dp) where
+Login and SignUp use 2dp. Aligned. The deeper fix, one shared auth top bar, is
+still worth doing and would give H-10 its home.
 
 The chevron on ForgotPassword sits 6dp right of the identical chevron on Login
 and SignUp, so it visibly jumps when a caregiver goes Login → Forgot password →

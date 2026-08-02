@@ -18,6 +18,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,6 +35,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.memoria.caregiver.analytics.LocalAnalytics
 import androidx.compose.ui.unit.sp
 import com.memoria.caregiver.ui.components.NemaraButton
 import com.memoria.caregiver.ui.components.NemaraButtonSize
@@ -72,6 +74,14 @@ fun ForgotPasswordScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // iOS attaches .trackScreen("forgot_password") to this destination in
+    // LoginView. The name has no "auth." prefix, unlike auth.login /
+    // auth.signup / auth.welcome — that is an inconsistency in the iOS
+    // analytics, and matching it keeps the two platforms' funnels comparable.
+    // Corrected on both together or not at all.
+    val analytics = LocalAnalytics.current
+    LaunchedEffect(Unit) { analytics.logScreen("forgot_password") }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -233,7 +243,10 @@ private fun BackBar(onBack: () -> Unit) {
     ) {
         Box(
             modifier = Modifier
-                .padding(start = Spacing.xs)
+                // 2.dp, matching Login and SignUp. Spacing.xs (8) here put this
+                // chevron 6dp right of the identical one on the screen a
+                // caregiver arrives from, so it visibly jumped on push and pop.
+                .padding(start = 2.dp)
                 .size(NAV_BAR_HEIGHT)
                 .testTag(FORGOT_PASSWORD_BACK_TAG)
                 .clickable(

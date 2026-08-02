@@ -128,3 +128,33 @@ class NemaraWaveformTest {
         assertEquals(80, WaveformAnimationDurationMillis)
     }
 }
+
+/**
+ * The animation must restart only when the bar heights actually change.
+ *
+ * HARDENING.md H-2: the effect was keyed on the FloatArray instance, which
+ * `waveformFractions` returns fresh every composition. Compose compares keys
+ * with `==`, which for arrays is referential identity, so every recomposition
+ * restarted it and cut in-flight animations short — a stutter on the talk-mode
+ * waveform exactly while a caregiver is speaking.
+ */
+class WaveformAnimationKeyTest {
+
+    @org.junit.Test
+    fun `equal level sets produce equal keys`() {
+        val a = waveformFractions(listOf(0.2f, 0.5f, 0.9f), 3, 0.06f)
+        val b = waveformFractions(listOf(0.2f, 0.5f, 0.9f), 3, 0.06f)
+
+        // The defect: two arrays with identical contents are NOT equal.
+        org.junit.Assert.assertNotEquals(a, b)
+        // The fix: their list views are, so the effect does not restart.
+        org.junit.Assert.assertEquals(a.toList(), b.toList())
+    }
+
+    @org.junit.Test
+    fun `different level sets produce different keys`() {
+        val a = waveformFractions(listOf(0.2f, 0.5f, 0.9f), 3, 0.06f)
+        val b = waveformFractions(listOf(0.2f, 0.5f, 0.4f), 3, 0.06f)
+        org.junit.Assert.assertNotEquals(a.toList(), b.toList())
+    }
+}
