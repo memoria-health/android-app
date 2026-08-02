@@ -1,0 +1,37 @@
+# --- Android / Gradle ---
+*.iml
+.gradle/
+/local.properties
+/.idea/
+.DS_Store
+/build
+app/build/
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+*.apk
+*.aab
+*.ap_
+*.dex
+/app/release
+/app/debug
+
+# --- Kotlin ---
+.kotlin/
+
+# --- Per-developer config ---
+# Android analog of the iOS LocalAppConfig.swift pattern, with one
+# deliberate difference: iOS commits the file with nil defaults and asks
+# each dev to `git update-index --skip-worktree` it. That leaked a real LAN
+# IP into the iOS repo. Here the file is gitignored from creation and a
+# .template is committed instead, so a developer's LAN address can never
+# reach a commit.
+app/src/main/java/**/LocalAppConfig.kt
+local.config.properties
+
+# --- Secrets / signing ---
+*.jks
+*.keystore
+google-services.json
+keystore.properties

@@ -1,0 +1,196 @@
+# HARNESS.md — how this port runs
+
+> The development loop for the Android port. Read once. It governs every phase so
+> that phases do not each get re-negotiated.
+>
+> Built on the `superpowers` plugin skills: `writing-plans`, `subagent-driven-development`,
+> `requesting-code-review`, `test-driven-development`, `verification-before-completion`,
+> `finishing-a-development-branch`.
+
+**Established 2026-08-01 at Aryaman's request:** "create a harness out of this
+development process so we can get started with minimal stops."
+
+---
+
+## 0. The four documents and what each is for
+
+| Doc | Role | Who writes it |
+|---|---|---|
+| `PARITY.md` | **The spec.** 29 sections, 103 files, frozen at pin `a6c27f6`. The thing reviewers review *against*. | Phase 0, done |
+| `HARNESS.md` | This file. The loop. | Once |
+| `docs/plans/YYYY-MM-DD-phase-N-*.md` | The per-phase task list, superpowers format, bite-sized TDD tasks. | Written at each phase start |
+| `DECISIONS.md` | Every judgement call made without stopping Aryaman, with the options considered. **The async review surface.** | Continuously |
+| `QUESTIONS.md` | Things that genuinely stop work. | Continuously |
+| `DIFFERENCES.md` | Deliberate divergences from iOS. | Continuously |
+
+`PARITY.md` is the spec because the Kotlin cannot be reviewed directly at 22k
+lines. **Every review is a diff against a PARITY section, never a freeform
+opinion.**
+
+---
+
+## 1. Why the plan is per-phase, not one document
+
+The `writing-plans` skill wants complete code inline and 2-5 minute tasks. For a
+22,224-line port that document *is* the port — writing it costs the same as doing
+it, and it would be stale before Phase 3.
+
+**Adaptation:** `PARITY.md` already carries the "complete detail" that
+`writing-plans` normally puts in the plan. Each phase plan therefore carries the
+*task decomposition, test list, and exact commands*, and points at
+`PARITY.md §N` for behavior. One plan per phase, written at phase start, when the
+previous phase's real shape is known.
+
+This is the only deviation from the skill, and it is recorded here rather than
+made silently.
+
+---
+
+## 2. The per-task loop
+
+Per `superpowers:subagent-driven-development`, with one addition (Aryaman's
+review dimensions merged into stage 2).
+
+```
+for each task in the phase plan:
+  1. implementer subagent   → TDD: red, green, refactor, commit, self-review
+  2. spec reviewer subagent → does it match PARITY.md §N? nothing missing, nothing EXTRA
+     └ issues? implementer fixes → re-review. Loop until ✅.
+  3. quality reviewer subagent → the 6-dimension rubric below
+     └ issues? implementer fixes → re-review. Loop until ✅.
+  4. mark complete
+```
+
+**Never** start stage 3 before stage 2 is green. **Never** advance with an open
+issue at either stage. **Never** run two implementer subagents in parallel.
+
+At phase end: one adjudicated full-diff review over the whole phase, then
+`superpowers:finishing-a-development-branch`.
+
+---
+
+## 3. The review rubric — 6 dimensions
+
+Merged from Aryaman's standing mandate (correctness / efficiency / memory /
+security / goal-adherence), his ask on this thread (logic / security /
+scalability / cleanliness), and the superpowers two-stage split. **One rubric, so
+there is one thing to satisfy rather than three.**
+
+| # | Dimension | The question | Auto-fail examples |
+|---|---|---|---|
+| 1 | **Spec compliance** | Does it match `PARITY.md §N`? | Missing behavior. **Anything extra that iOS does not do.** |
+| 2 | **Logic** | Is it correct at the boundaries? | Off-by-one, wrong null handling, race on shared state, wrong coroutine scope |
+| 3 | **Security & privacy** | Would this leak? | Token/PII in logs, cleartext outside debug, secret in VCS, RLS assumption unverified, missing `setAuth` pump |
+| 4 | **Performance & memory** | Does it survive a 24h session? | Leaked listener/collector, unbounded buffer, allocation in a frame callback, recomposition storm, bitmap not recycled |
+| 5 | **Cleanliness** | Is anything dead? | Unreachable branch, unused symbol, commented-out code, stale TODO, copy-paste duplication. **Delete it — do not comment it out.** |
+| 6 | **Test quality** | Do the tests test behavior? | Test asserts the implementation back at itself, no red phase observed, mock-only test with no real path |
+
+Severity: **Critical** (fix now, blocks the task) / **Important** (fix before the
+phase ends) / **Minor** (log it, batch it).
+
+---
+
+## 4. Test strategy — four tiers, honest about what TDD means here
+
+Blanket "TDD everything" does not survive contact with Android UI. What follows
+is where tests actually pay, and it is not a compromise: **the risk register is
+almost entirely pure logic, so the tier that gets strict TDD is the tier that
+carries the risk.**
+
+| Tier | Where | What | Discipline |
+|---|---|---|---|
+| **0 · Compile** | `./gradlew assembleDebug` | everything | **Green at every commit. No exceptions.** |
+| **1 · JVM unit** (`src/test/`) | pure Kotlin, no Android | decoders, date fallback chain, error mapping, camera-state diff, `FaceCoverageModel`, deep-link reconcile, blur box math, connectivity fusion, analytics naming | **Strict TDD. Red observed before green.** |
+| **2 · Robolectric + Compose UI** (`src/test/`) | JVM w/ Android shims | component state, form validation, navigation, gating (terms, privacy placard) | **Test-first for stateful behavior**, test-after acceptable for pure rendering |
+| **3 · Instrumented** (`src/androidTest/`) | real device | LiveKit, CameraX, ML Kit, FCM | **Cannot TDD.** Written now, **run day 9-10.** Accepted risk, already logged. |
+
+**Plus, and it is a first-class gate: the screenshot parity check.** Parity is the
+product requirement, so for any screen the test of record is a screenshot beside
+the iOS original. A screen with green unit tests and a wrong screenshot is not
+done.
+
+### The two rules that matter most
+
+- **Red before green.** If the failing test was not observed failing, it does not
+  count and the task is not done. From `verification-before-completion`: *if you
+  haven't run the command in this message, you cannot claim it passes.*
+- **Every risk-register item gets a named test.** `PARITY.md §9` R1-R8 and the
+  §29 "ten things most likely to be ported wrong" each map to at least one Tier-1
+  test. That list is the regression suite for the port.
+
+---
+
+## 5. Escalation — exactly what stops the machine
+
+Aryaman's standing instruction is to surface design choices before implementing.
+On this thread he asked for minimal stops. **The reconciliation: keep the
+visibility, drop the blocking.** Judgement calls get made and written to
+`DECISIONS.md` with the options and the reasoning, so they can be reviewed and
+reversed asynchronously instead of serially.
+
+### STOP and wait (these are the only ones)
+
+1. An open `QUESTIONS.md` item lands on the critical path.
+2. A divergence is needed that is **not** platform-mechanism — i.e. a redesign.
+   (`DIFFERENCES.md` states the bar: "cleaner" and "more idiomatic" are not reasons.)
+3. A **backend or contract change** is required. Never change the backend to suit
+   the client mid-port.
+4. Something needs a **credential, a paid account, a device, or an app-store
+   identity**.
+5. A task turns out to be **>2× its estimate**, so scope is Aryaman's call.
+6. A **user-visible product decision** with no iOS precedent (Q5 is the live example).
+
+### Do NOT stop (decide, log to `DECISIONS.md`, continue)
+
+Library choice, file layout, naming, test structure, Compose idiom, error copy
+that already exists in `PARITY.md`, anything the iOS source already answers.
+
+**When stopped:** work the rest of the phase around it. Halt the item, not the
+phase.
+
+---
+
+## 6. Git
+
+The repo is fresh, has no deployed code, and lives under a cloud-synced tree.
+
+- **No worktrees.** `superpowers` prefers them, but OneDrive/iCloud stat races
+  abort `checkout`/`merge`/`rebase` in this workspace (see workspace `CLAUDE.md`).
+  Worktrees would multiply that failure. **Branch per phase in one working copy.**
+- Branch naming: `phase-N-<slug>` (e.g. `phase-1-design-system`).
+- Commit per green test cycle. Conventional commits (`feat:`, `fix:`, `test:`,
+  `chore:`).
+- Phase end → full-diff review → merge to `main`. `main` stays green.
+- **Nothing is deployed from this repo yet**, so `main` merges do not carry the
+  production risk that `nemara-backend` and `nemara-caregiver-app` do. When the
+  first release build ships, this rule tightens to match the other repos.
+
+---
+
+## 7. Phase-end checklist
+
+Every phase, no exceptions:
+
+- [ ] `./gradlew assembleDebug` — exit 0, output pasted
+- [ ] `./gradlew test` — pass count stated, 0 failures
+- [ ] Every risk-register item touched this phase has a named test
+- [ ] Screenshot parity pass for every screen added
+- [ ] `DECISIONS.md`, `DIFFERENCES.md`, `QUESTIONS.md` current
+- [ ] Adjudicated full-diff review across all 6 dimensions
+- [ ] Dead code sweep: zero unused symbols, zero commented-out blocks
+- [ ] Plan doc checkboxes ticked; next phase's plan written
+
+---
+
+## 8. What Aryaman reads
+
+Deliberately small, because attention is the scarce resource:
+
+1. **`DECISIONS.md`** — async, whenever. The reversal surface.
+2. **`QUESTIONS.md` STOP items** — these are actually blocking.
+3. **Phase-end summaries** — one screen each, with the verification output.
+4. **Screenshot diffs** — the only reliable way to judge parity, and the one
+   thing a subagent genuinely cannot self-verify.
+
+Not for review: the Kotlin, task-level commits, subagent review transcripts.
+`PARITY.md` is the gate that makes skipping those safe.
