@@ -35,7 +35,7 @@ Legend — **Blocks:** what cannot be completed. **Needs:** the requirement itse
 | REQ-8 | Backend device registration | Backend decision on `/v1/me/devices` — `platform` discriminator vs sibling route (`QUESTIONS.md` Q1) | The registration call only; token retrieval and display are unblocked | 7 |
 | REQ-9 | Play signing identity | Upload key + Play Console entry | Any release build. Debug is unaffected. | later |
 | REQ-10 | Real ToS / Privacy PDFs | Veritas documents (`QUESTIONS.md` Q4) | Nothing — placeholders ship, swap on both platforms together | 8 |
-| REQ-11 | Test caregiver account | A seeded account against a real backend | Auth E2E and every screen that needs a session | 2 |
+| REQ-11 | Test caregiver account | **MET 2026-08-02.** `android.test@memoria.local` created against local Supabase via the admin API (email pre-confirmed, so no mail loop). Signs in from the app. | — | 2 |
 
 ## Test fixtures to author
 
@@ -45,7 +45,7 @@ Legend — **Blocks:** what cannot be completed. **Needs:** the requirement itse
 | REQ-13 | Synthetic LiveKit publisher | A test room publishing a known video pattern | Client-side video tests without REQ-2 | 4 |
 | REQ-14 | iOS screenshot corpus | A **built, signed-in** iOS app at the port pin. Investigated 2026-08-01: `xcodegen` and iOS 17.2 simulators are available and the repo is clean on the pin branch, but the only prebuilt app is from May 22, months stale. Building is feasible; **populating the screens is not** — almost every screen needs a session and seeded data (REQ-11, REQ-16). SwiftUI `#Preview` blocks cannot be captured headlessly. | A true pixel-level parity gate | all |
 | REQ-15 | Realtime payload corpus | Captured raw `postgres_changes` rows vs REST responses | The 10 lenient-decode rules (`PARITY.md` §7) — the dual-shape bug class | 3 |
-| REQ-16 | Backend fixture / seeded state | A backend with patients, cameras, detectors, events | Any screen-level E2E | 2 |
+| REQ-16 | Backend fixture / seeded state | **PARTLY MET 2026-08-02.** Local stack up (Supabase :54341, FastAPI :8002 — the backend container had been dead 18h and was restarted). One patient (Margaret Doyle) with 4 detectors, seeded through the real API. Cameras and events still 0: both need real hardware or a detection run. | Live video and event screens | 2 |
 
 ## Design decisions still open
 

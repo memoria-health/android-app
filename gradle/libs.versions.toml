@@ -12,6 +12,8 @@
 agp = "9.3.1"
 kotlin = "2.4.10"
 activityCompose = "1.13.0"
+navigationCompose = "2.9.8"
+lifecycle = "2.9.4"
 composeBom = "2026.06.01"
 
 # test
@@ -27,7 +29,14 @@ kotlinxDatetime = "0.8.0"
 supabase = "3.7.0"
 kotlinxCoroutines = "1.10.2"
 
+# Phase 4 — live video. Phase 6 — face enrollment.
+livekit = "2.27.0"
+mlkitFace = "16.1.7"
+camerax = "1.6.1"
+
 [libraries]
+androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigationCompose" }
+androidx-lifecycle-viewmodel-compose = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "lifecycle" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
 
 # Compose — versions come from the BOM, so these carry no version.ref
@@ -55,6 +64,12 @@ supabase-bom = { group = "io.github.jan-tennert.supabase", name = "bom", version
 supabase-auth = { group = "io.github.jan-tennert.supabase", name = "auth-kt" }
 supabase-realtime = { group = "io.github.jan-tennert.supabase", name = "realtime-kt" }
 supabase-postgrest = { group = "io.github.jan-tennert.supabase", name = "postgrest-kt" }
+livekit-android = { group = "io.livekit", name = "livekit-android", version.ref = "livekit" }
+mlkit-face-detection = { group = "com.google.mlkit", name = "face-detection", version.ref = "mlkitFace" }
+androidx-camera-core = { group = "androidx.camera", name = "camera-core", version.ref = "camerax" }
+androidx-camera-camera2 = { group = "androidx.camera", name = "camera-camera2", version.ref = "camerax" }
+androidx-camera-lifecycle = { group = "androidx.camera", name = "camera-lifecycle", version.ref = "camerax" }
+androidx-camera-view = { group = "androidx.camera", name = "camera-view", version.ref = "camerax" }
 kotlin-reflect = { group = "org.jetbrains.kotlin", name = "kotlin-reflect", version.ref = "kotlin" }
 
 [plugins]

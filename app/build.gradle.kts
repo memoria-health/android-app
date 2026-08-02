@@ -142,6 +142,8 @@ tasks.matching { it.name == "testDebugUnitTest" }.configureEach {
 
 dependencies {
     implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.navigation.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.kotlinx.coroutines.android)
 
     // Networking + serialization (Phase 2)
@@ -164,6 +166,17 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.foundation)
     implementation(libs.androidx.compose.material3)
+
+    // Phase 4 — live video, blur, talk mode.
+    implementation(libs.livekit.android)
+
+    // Phase 6 — face enrollment. ML Kit replaces Apple Vision; CameraX replaces
+    // AVCaptureSession.
+    implementation(libs.mlkit.face.detection)
+    implementation(libs.androidx.camera.core)
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.view)
 
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)
