@@ -44,6 +44,29 @@ android {
         unitTests {
             // Robolectric needs merged resources to inflate themes and resolve fonts.
             isIncludeAndroidResources = true
+
+            all {
+                it.testLogging {
+                    events("passed", "skipped", "failed")
+                    exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+                }
+                // HARNESS.md §7 requires a stated pass count, not just exit 0.
+                // Gradle prints nothing on success by default, which makes "all
+                // tests pass" unfalsifiable — and an empty source set looks
+                // identical to a green one.
+                it.afterSuite(
+                    KotlinClosure2<TestDescriptor, TestResult, Unit>({ desc, result ->
+                        if (desc.parent == null) {
+                            println(
+                                "TEST SUMMARY: ${result.testCount} tests, " +
+                                    "${result.successfulTestCount} passed, " +
+                                    "${result.failedTestCount} failed, " +
+                                    "${result.skippedTestCount} skipped",
+                            )
+                        }
+                    }),
+                )
+            }
         }
     }
 

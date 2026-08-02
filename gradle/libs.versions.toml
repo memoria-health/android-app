@@ -14,7 +14,9 @@ coroutines = "1.9.0"
 
 # test
 junit = "4.13.2"
-robolectric = "4.13"
+# 4.14+ is required: 4.13 caps at API 34 and refuses to run at all against a
+# package with targetSdkVersion 35 ("targetSdkVersion=35 > maxSdkVersion=34").
+robolectric = "4.14.1"
 androidxTestExt = "1.2.1"
 androidxTestCore = "1.6.1"
 turbine = "1.2.0"
