@@ -107,7 +107,12 @@ real data.
 ---
 
 ## H-7 — `mapAuthError` matches on English substrings of SDK error text
-**Phase 2 · effort: medium · carried from iOS**
+**Phase 2 · RESOLVED ON ANDROID 2026-08-02 · still open on iOS**
+
+Android now matches the typed `AuthErrorCode.InvalidCredentials`
+(`DIFFERENCES.md` D12), with iOS's substring test kept only as a fallback for
+deployments that answer without a code. **iOS still has the original fragility**
+— left here so it is not lost.
 
 iOS decides between `unauthorized` and a generic error by testing whether the
 Supabase error description contains `"invalid login"` or `"invalid credentials"`.

@@ -178,5 +178,23 @@ large sizes, which the app does not use.
 
 ---
 
+## D12 — Auth errors are matched on a typed code, not on English text
+**Category:** platform mechanism differs
+**iOS:** `mapAuthError` asks whether the Supabase error description *contains*
+`"invalid login"` or `"invalid credentials"` and returns `.unauthorized` if so.
+**Android:** matches `AuthRestException.errorCode == AuthErrorCode.InvalidCredentials`.
+**Why:** the Kotlin SDK exposes a typed error code that the Swift SDK does not.
+The substring test works until Supabase rewords a message, localizes one, or the
+two SDKs word it differently — at which point a wrong password quietly starts
+showing the generic failure copy instead of a sign-in error. The observable
+behavior is what iOS *intends*; it just cannot drift.
+**Fallback preserved:** iOS's substring test still runs when no typed code is
+available, so an older Supabase deployment degrades to iOS's behavior rather
+than to nothing. Tested.
+**Note for iOS:** the same fragility exists there and is logged as
+`HARDENING.md` H-7.
+
+---
+
 _(Add entries as they arise. Cosmetic gaps found in the Phase 8 screenshot pass
 go here too, each with a reason or a fix.)_
