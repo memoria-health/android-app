@@ -8,6 +8,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.memoria.caregiver.data.livekit.CameraConnectivity
+import com.memoria.caregiver.data.livekit.LiveKitConnectionState
 import com.memoria.caregiver.data.model.Camera
 import com.memoria.caregiver.ui.theme.Danger
 import com.memoria.caregiver.ui.theme.Ink3
@@ -42,60 +44,6 @@ import java.util.Locale
  */
 
 // ---------------------------------------------------------------------------
-// Connectivity
-// ---------------------------------------------------------------------------
-
-/**
- * PARITY.md §11 `LiveKitClient.CameraConnectivity`, the fused predicate every
- * live-tile affordance switches on rather than reading the raw signals — room
- * state, backend `online`, SDK track presence and placeholder rows disagree
- * during reconnects.
- *
- * **PROVISIONAL LOCATION.** This belongs to the LiveKit client unit
- * (`Services/LiveKitClient.swift`), which does not exist on Android yet. It is
- * declared here because the state pill cannot be rendered without it, and it is
- * scoped `internal` so lifting it into the client later is a move, not a
- * rewrite. Same pattern, and the same caveat, as `ui/events/EventGlyphs.kt`.
- *
- * [Joining] is declared but never returned, exactly as on iOS — PARITY.md §11
- * says to port the enum as-is and not to invent a joining branch.
- */
-internal enum class LiveConnectivity {
-    /** No `livekitIdentity` yet: a pairing code is open, no wall phone claimed it. */
-    Unpaired,
-
-    /** This device's room is not connected, so nothing can be said about a camera. */
-    RoomDown,
-
-    /** In the room, but no video track for this camera. */
-    Offline,
-
-    /** Declared for parity; never returned. */
-    Joining,
-
-    /** A video track is flowing. */
-    Live,
-}
-
-/**
- * iOS `LiveKitClient.connectivity(of:)`.
- *
- * Deliberately does **not** consult `camera.online`: the SDK's track map is the
- * most direct "video is flowing right now" signal, and the backend column can
- * lag it by about ten seconds (the REST reconcile interval).
- */
-internal fun liveConnectivity(
-    camera: Camera,
-    trackIdentities: Set<String>,
-    roomConnected: Boolean,
-): LiveConnectivity {
-    val identity = camera.livekitIdentity ?: return LiveConnectivity.Unpaired
-    if (!roomConnected) return LiveConnectivity.RoomDown
-    if (identity in trackIdentities) return LiveConnectivity.Live
-    return LiveConnectivity.Offline
-}
-
-// ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
 
@@ -124,8 +72,10 @@ data class LiveCaptureNote(
  *   room, matching iOS's one `LiveKitClient` instance.
  * @param videoTracksByIdentity subscribed remote video tracks keyed by publisher
  *   identity. iOS: `env.liveKit.videoTracksByIdentity`.
- * @param roomConnected whether the SDK reports the room connected. Separate from
- *   [room] being non-null because a room object outlives a dropped connection.
+ * @param connectionState the client's own room state. Separate from [room] being
+ *   non-null because a room object outlives a dropped connection, and it is the
+ *   whole state rather than a boolean because `cameraConnectivity` takes it and
+ *   because a terminal `Failed` carries a reason the UI must not lose.
  * @param audioEnabledIdentities the per-tile listen choices.
  *   iOS: `env.liveKit.audioEnabledByIdentity`. **Audio is volume-gated, not
  *   subscription-gated** (PARITY.md §11), so this is a playback choice, not a
@@ -154,7 +104,7 @@ data class LiveVideoState(
     val camerasPaused: Boolean = false,
     val room: Room? = null,
     val videoTracksByIdentity: Map<String, VideoTrack> = emptyMap(),
-    val roomConnected: Boolean = false,
+    val connectionState: LiveKitConnectionState = LiveKitConnectionState.Disconnected,
     val selectedCameraId: String? = null,
     val talk: TalkUiState = TalkUiState(),
     val nowMillis: Long = 0L,
@@ -323,12 +273,12 @@ internal sealed interface LiveStatePill {
 
 internal fun statePill(
     camera: Camera,
-    connectivity: LiveConnectivity,
+    connectivity: CameraConnectivity,
     callActive: Boolean,
 ): LiveStatePill = when (connectivity) {
-    LiveConnectivity.Live -> LiveStatePill.Live(onAir = callActive)
-    LiveConnectivity.Joining, LiveConnectivity.RoomDown -> LiveStatePill.None
-    LiveConnectivity.Offline, LiveConnectivity.Unpaired ->
+    CameraConnectivity.LIVE -> LiveStatePill.Live(onAir = callActive)
+    CameraConnectivity.JOINING, CameraConnectivity.ROOM_DOWN -> LiveStatePill.None
+    CameraConnectivity.OFFLINE, CameraConnectivity.UNPAIRED ->
         if (camera.isAppClosed) LiveStatePill.AppClosed else LiveStatePill.None
 }
 
