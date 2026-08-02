@@ -127,3 +127,31 @@ class PatientAvatarTest {
         }
     }
 }
+
+/**
+ * HARDENING.md H-3: the refresh key's separator, which its own KDoc calls
+ * load-bearing but which no test pinned.
+ */
+class PatientAvatarRefreshKeySeparatorTest {
+
+    /**
+     * Without the `|`, the id and the storage key run together, so a patient
+     * whose id ends in "a" with key "b.jpg" produces the same key as one whose
+     * id ends in "" with key "ab.jpg" — and the second patient shows the
+     * first's photo. Concatenating without a separator passes every other test
+     * in this file.
+     */
+    @org.junit.Test
+    fun `the separator keeps two id and key pairs from colliding`() {
+        val a = patientAvatarRefreshKey("11111111-1111-1111-1111-11111111111a", "b.jpg")
+        val b = patientAvatarRefreshKey("11111111-1111-1111-1111-11111111111", "ab.jpg")
+        org.junit.Assert.assertNotEquals(a, b)
+        org.junit.Assert.assertTrue("key must contain the separator: $a", '|' in a)
+    }
+
+    /** A null storage key still separates, so it cannot collide with an empty one. */
+    @org.junit.Test
+    fun `a null storage key still emits the separator`() {
+        org.junit.Assert.assertEquals("patient-1|", patientAvatarRefreshKey("patient-1", null))
+    }
+}

@@ -44,6 +44,17 @@ internal object NemaraPulseSpec {
     const val DOT_FRACTION = 0.6f
 
     /**
+     * `.repeatForever(autoreverses: false)` — every cycle starts over from the
+     * inside. Reversing instead would make the ring shrink back into the dot,
+     * a visible defect on every LIVE chip in the app, so it is stated here as a
+     * value rather than left implicit in the animation spec.
+     */
+    const val REPEAT_REVERSES = false
+
+    /** iOS `init(color: NemaraColor.terra, size: 8)`. */
+    val DEFAULT_SIZE_DP = 8f
+
+    /**
      * SwiftUI's `.easeOut` is CSS ease-out, i.e. cubic-bezier(0, 0, 0.58, 1).
      * Spelled out rather than using the stdlib `EaseOut` alias so the mapping to
      * the Swift is checkable without opening the Compose source.
@@ -105,7 +116,7 @@ fun NemaraPulse(
                 durationMillis = NemaraPulseSpec.DURATION_MILLIS,
                 easing = NemaraPulseSpec.RingEasing,
             ),
-            repeatMode = RepeatMode.Restart,
+            repeatMode = if (NemaraPulseSpec.REPEAT_REVERSES) RepeatMode.Reverse else RepeatMode.Restart,
         ),
         label = "pulseProgress",
     )

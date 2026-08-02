@@ -58,7 +58,13 @@ array instance.
 ---
 
 ## H-3 — Untested behavior the reviews flagged and I deferred
-**Phase 1 · effort: small**
+**Phase 1 · MOSTLY FIXED 2026-08-02** — the pulse's repeat mode and default
+size, and the avatar refresh key's separator, are now pinned and verified by
+mutation (inverting each value fails exactly the test written for it).
+The remaining item is `PatientAvatar`'s clear-to-null on patient switch, which
+needs a composition test and is folded into H-1.
+
+**Original entry, for the record:**
 
 - `NemaraPulse`: `RepeatMode.Restart` is untested. `Reverse` would make the ring
   shrink back inward — a visible defect on every LIVE chip — and nothing catches it.
@@ -83,7 +89,13 @@ it reads as safety. Named by the reviewers in `NemaraPulse`, `NemaraMark`,
 ---
 
 ## H-5 — Model tests build their own Json instead of the shipping one
-**Phase 2 · found by review · effort: small**
+**Phase 2 · FIXED 2026-08-02** — both files now use `NemaraJson.json`. Worth
+noting what the hole was: `PatientModelsTest`'s local copy set only
+`ignoreUnknownKeys`, missing `explicitNulls` and `encodeDefaults`, so its encode
+assertions described a wire format the app never sends. All 534 tests still pass
+against the real configuration.
+
+**Original entry, for the record:**
 
 Several model test files construct a local `Json { ... }` rather than using
 `NemaraJson.json`, so they never exercise the configuration the app actually

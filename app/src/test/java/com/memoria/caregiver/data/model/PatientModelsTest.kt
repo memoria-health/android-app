@@ -3,6 +3,7 @@
 package com.memoria.caregiver.data.model
 
 import kotlinx.serialization.SerializationException
+import com.memoria.caregiver.data.remote.NemaraJson
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -39,7 +40,15 @@ class PatientModelsTest {
      * unknown keys because Realtime ships raw DB rows with columns the API
      * schema does not expose.
      */
-    private val json = Json { ignoreUnknownKeys = true }
+    // The SHIPPING configuration, not a local one.
+    //
+    // HARDENING.md H-5: these tests used to build their own Json, so they never
+    // exercised the config the app actually uses — a change to
+    // ignoreUnknownKeys, explicitNulls or encodeDefaults would have broken the
+    // app and left the suite green. PatientModelsTest's local copy was missing
+    // two of the three settings outright, so its encode assertions described a
+    // wire format that never shipped.
+    private val json = NemaraJson.json
 
     // -----------------------------------------------------------------------
     // Payloads

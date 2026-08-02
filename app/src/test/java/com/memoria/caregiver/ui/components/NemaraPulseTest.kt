@@ -97,3 +97,28 @@ class NemaraPulseTest {
         assertEquals(7.2f, NemaraPulseSpec.dotDiameter(12.dp).value, 1e-5f)
     }
 }
+
+/**
+ * HARDENING.md H-3: behaviour the review flagged as unpinned.
+ *
+ * These are values a reasonable edit could flip without any other test
+ * noticing, and each one is visible on every LIVE chip in the app.
+ */
+class NemaraPulseUnpinnedBehaviourTest {
+
+    /**
+     * `autoreverses: false`. Reversing would make the ring shrink back into the
+     * dot each cycle instead of restarting from the inside — an obviously wrong
+     * animation that no other assertion would catch.
+     */
+    @org.junit.Test
+    fun `the pulse restarts rather than reversing`() {
+        org.junit.Assert.assertFalse(NemaraPulseSpec.REPEAT_REVERSES)
+    }
+
+    /** iOS: `size: CGFloat = 8`. A LIVE chip's dot is sized against this. */
+    @org.junit.Test
+    fun `the default size is eight points`() {
+        org.junit.Assert.assertEquals(8f, NemaraPulseSpec.DEFAULT_SIZE_DP, 0f)
+    }
+}

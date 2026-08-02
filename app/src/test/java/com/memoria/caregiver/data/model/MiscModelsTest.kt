@@ -1,6 +1,7 @@
 package com.memoria.caregiver.data.model
 
 import kotlinx.serialization.SerializationException
+import com.memoria.caregiver.data.remote.NemaraJson
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -23,10 +24,15 @@ class MiscModelsTest {
      * The configuration `PARITY.md §7` mandates for the shared client:
      * responses decode leniently, nulls are never written on the way out.
      */
-    private val json = Json {
-        ignoreUnknownKeys = true
-        explicitNulls = false
-    }
+    // The SHIPPING configuration, not a local one.
+    //
+    // HARDENING.md H-5: these tests used to build their own Json, so they never
+    // exercised the config the app actually uses — a change to
+    // ignoreUnknownKeys, explicitNulls or encodeDefaults would have broken the
+    // app and left the suite green. PatientModelsTest's local copy was missing
+    // two of the three settings outright, so its encode assertions described a
+    // wire format that never shipped.
+    private val json = NemaraJson.json
 
     // Wire carries "...182734"; Foundation truncates below the millisecond,
     // so the decoded instant is 182 ms exactly. Verified against the real
