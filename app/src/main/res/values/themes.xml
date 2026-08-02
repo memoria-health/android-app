@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Platform theme only. Compose supplies the real theming (ui/theme/Theme.kt).
+      Parented to android:Theme.Material.Light so the app never inherits a dark
+      platform theme — iOS is light-mode only (PARITY.md §9 R8).
+      Deliberately NOT Theme.AppCompat.*: that requires the AppCompat dependency,
+      which this app does not use.
+    -->
+    <style name="Theme.Memoria" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/paper</item>
+        <item name="android:statusBarColor">@color/paper</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+</resources>

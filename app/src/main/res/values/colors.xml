@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Only the handful of tokens the PLATFORM needs before Compose starts
+      (window background, status bar). The full 22-token palette is Kotlin, in
+      ui/theme/Color.kt, which is the single source of truth.
+
+      iOS keeps its palette in the asset catalog because launch screens can only
+      reference catalog colors. Android has no such constraint (PARITY.md §13),
+      so these two must stay in sync by hand — keep this list minimal.
+    -->
+    <color name="paper">#EFE6DA</color>
+</resources>
