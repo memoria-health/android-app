@@ -5,6 +5,7 @@ import com.memoria.caregiver.data.model.UpdateDetectorRequest
 import java.util.Locale
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.ExperimentalTime
 
 /**
  * State for the detector detail editor, and every piece of its logic that does
@@ -261,6 +262,42 @@ data class DetectorDetailState(
 
     val canRegenerate: Boolean get() = !regenerating && trimmedFeedback.isNotEmpty()
 
+    // ---- What the criteria card is doing right now -------------------------
+
+    /**
+     * The line over the shimmer while the criteria card is (re)generating, or
+     * null when it should show criteria instead.
+     *
+     * Three different waits share one skeleton and are told apart only by this
+     * sentence, so the order matters: a dry run in flight reads as "re-reading",
+     * a committed refine recompiling reads as "applying", and a brand-new
+     * detector still compiling reads as "writing".
+     *
+     * The compile case is the only one that also requires the card to be empty —
+     * a detector that has criteria already keeps showing them while a later
+     * compile poll runs, rather than blanking out under the caregiver.
+     */
+    val generatingLabel: String?
+        get() = when {
+            regenerating -> "Re-reading your change…"
+            rewriting -> "Applying your change…"
+            compiling && shownCriteria.isEmpty() -> "Writing the instructions…"
+            else -> null
+        }
+
+    /**
+     * Whether the alert-timing chips are offered at all.
+     *
+     * Only a custom, sustained detector has an edge to choose. Instant detectors
+     * have one moment, absence detectors fire on a deadline, and presets are
+     * Memoria's shape rather than the caregiver's — all three get the read-only
+     * sentence and nothing else.
+     */
+    val showsTimingChoice: Boolean
+        get() = isCustom &&
+            detector.isSustained &&
+            staged.alertTrigger != Detector.AlertTrigger.ABSENCE
+
     // ---- Transitions -------------------------------------------------------
 
     /**
@@ -369,6 +406,61 @@ data class DetectorDetailState(
         }
         return if (hasPatch) patch else null
     }
+
+    /**
+     * Step 2 of Save: the words to commit through `refine(preview = false)`, or
+     * null when there is nothing to commit.
+     *
+     * A preview on screen is NOT enough on its own — the preview was a dry run
+     * and the server kept nothing, so what gets committed is always the text in
+     * the box. Presets never reach here: only a custom detector has a prompt to
+     * recompile.
+     */
+    val pendingRefine: String?
+        get() = if (isCustom && trimmedFeedback.isNotEmpty()) trimmedFeedback else null
+
+    /** Both steps of Save in the order the host must run them. See [SavePlan]. */
+    val savePlan: SavePlan get() = SavePlan(patch = buildPatch(), refineFeedback = pendingRefine)
+
+    /**
+     * Whether a polled row is newer than the one on screen — the test that ends
+     * the post-refine poll.
+     *
+     * A committed refine recompiles server-side *after* the response returns, so
+     * the row that comes back still carries the old summary. Only a strictly
+     * newer `updated_at` proves the rewrite landed; adopting an equal timestamp
+     * would end the poll on the row we already have and leave the stale summary
+     * up until the caregiver reopened the sheet.
+     */
+    @OptIn(ExperimentalTime::class)
+    fun isFresher(candidate: Detector): Boolean = candidate.updatedAt > detector.updatedAt
+}
+
+/**
+ * The two steps of Save, in order. iOS runs them inline in `save()`; here the
+ * host performs the calls and this says what they are.
+ *
+ * 1. [patch] — one `PATCH` carrying only the fields that changed, or null when
+ *    none did. An alert-timing change rides along with it: the detection
+ *    fragment is unchanged, so nothing has to recompile, only when it fires.
+ * 2. [refineFeedback] — `refine(preview = false)`, which DOES recompile.
+ *
+ * Order is load-bearing. The refine re-infers alert trigger, active window and
+ * rooms from the caregiver's words, so running it second lets the server's
+ * inference win over the staged pickers rather than the other way round.
+ *
+ * Two things the host owns that this cannot express, both of them iOS behavior:
+ * after a committed refine the saving flag drops **before** the poll and the
+ * rewriting flag goes up for its duration, and that path does NOT re-read
+ * category and sensitivity from the server echo the way a patch-only save does
+ * (see [DetectorDetailState.withRefineCommitted] versus
+ * [DetectorDetailState.withPatchCommitted]).
+ */
+data class SavePlan(
+    val patch: UpdateDetectorRequest?,
+    val refineFeedback: String?,
+) {
+    val hasWork: Boolean get() = patch != null || refineFeedback != null
 }
 
 // ---------------------------------------------------------------------------
@@ -377,6 +469,34 @@ data class DetectorDetailState(
 
 /** The sentinel `where_rooms` value meaning "every room". */
 const val ALL_ROOMS: String = "ALL ROOMS"
+
+/**
+ * The fallbacks iOS shows when a failure carries no `errorDescription` of its
+ * own. The host renders the platform's own sentence when there is one and these
+ * otherwise, so they live here rather than being retyped at the call site.
+ */
+const val PREVIEW_FAILURE_MESSAGE: String = "Couldn't preview that. Please try again."
+const val SAVE_FAILURE_MESSAGE: String = "Couldn't save that. Please try again."
+
+/** The chip label for a category. iOS: `categoryLabel(_:)`. */
+fun categoryLabel(category: Detector.Category): String = when (category) {
+    Detector.Category.SAFETY -> "Safety"
+    Detector.Category.ROUTINE -> "Routine"
+}
+
+/**
+ * The line under the sensitivity chips. iOS: `sensitivityHint`.
+ *
+ * `OFF` is unreachable from the three chips, but the wire type carries it and a
+ * detector saved by another surface can arrive with it, so it has a sentence
+ * rather than a crash.
+ */
+fun sensitivityHint(level: Detector.Sensitivity): String = when (level) {
+    Detector.Sensitivity.LOW -> "Fewer alerts, only the clearest signals"
+    Detector.Sensitivity.STANDARD -> "Recommended baseline"
+    Detector.Sensitivity.HIGH -> "More alerts"
+    Detector.Sensitivity.OFF -> "Detector off"
+}
 
 /** The window used when a detector has no parseable one of its own. */
 val DEFAULT_WINDOW_START: HourMinute = HourMinute(8, 0)
