@@ -35,3 +35,13 @@ local.config.properties
 *.keystore
 google-services.json
 keystore.properties
+
+# Env files, including editor/OS backup variants. The sibling nemara-backend
+# repo was hit by exactly this: a local .env.bak was swept into origin/main and
+# the keys are still unrotated. The .bak/.local/.save patterns matter as much as
+# .env itself — those are the ones nobody thinks to check.
+.env
+.env.*
+*.env
+!.env.template
+!.env.example

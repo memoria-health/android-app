@@ -2,8 +2,6 @@ package com.memoria.caregiver.ui.theme
 
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.junit4.createComposeRule
 import kotlin.reflect.full.memberProperties
@@ -29,12 +27,19 @@ class ThemeTest {
 
     @get:Rule val compose = createComposeRule()
 
+    /**
+     * A plain captured var, not a MutableState. Writing snapshot state from
+     * inside composition is a side effect in composition, which Compose's
+     * contract forbids; it is only harmless here because nothing reads it back
+     * during composition. Adding such a read — the natural way to extend this
+     * helper — would turn it into an infinite recomposition loop.
+     */
     private fun capture(): Map<String, Color> {
-        val captured = mutableStateOf(emptyMap<String, Color>())
+        var captured: Map<String, Color> = emptyMap()
         compose.setContent {
             MemoriaTheme {
                 val scheme = MaterialTheme.colorScheme
-                captured.value = mapOf(
+                captured = mapOf(
                     "background" to scheme.background,
                     "surface" to scheme.surface,
                     "onBackground" to scheme.onBackground,
@@ -46,8 +51,8 @@ class ThemeTest {
             }
         }
         compose.waitForIdle()
-        val result by captured
-        return result
+        assertTrue("composition produced no scheme", captured.isNotEmpty())
+        return captured
     }
 
     @Test

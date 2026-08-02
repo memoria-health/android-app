@@ -1,53 +1,41 @@
 # Version catalog — the ONLY place versions are declared.
-# No version literals in any build.gradle.kts. Phase 2's Ktor/Supabase and
-# Phase 4's LiveKit land here.
+# No version literals in any build.gradle.kts.
+#
+# This file carries what the code ACTUALLY imports, nothing more. Declaring
+# Phase 2's Ktor or Phase 4's LiveKit ahead of use is the "keep it for later"
+# pattern HARNESS.md §3 dimension 5 rejects: unused dependencies are dead
+# weight, they inflate the APK, and they make it impossible to tell which
+# libraries the app really depends on. Add each one in the commit that first
+# imports it.
 
 [versions]
 agp = "8.7.3"
 kotlin = "2.0.21"
-coreKtx = "1.13.1"
-lifecycle = "2.8.7"
 activityCompose = "1.9.3"
 composeBom = "2024.10.01"
-navigationCompose = "2.8.4"
-coroutines = "1.9.0"
 
 # test
 junit = "4.13.2"
 # 4.14+ is required: 4.13 caps at API 34 and refuses to run at all against a
 # package with targetSdkVersion 35 ("targetSdkVersion=35 > maxSdkVersion=34").
 robolectric = "4.14.1"
-androidxTestExt = "1.2.1"
-androidxTestCore = "1.6.1"
-turbine = "1.2.0"
 
 [libraries]
-androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
-androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycle" }
-androidx-lifecycle-viewmodel-compose = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "lifecycle" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
-androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigationCompose" }
-kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
 
 # Compose — versions come from the BOM, so these carry no version.ref
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
 androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }
 androidx-compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
-androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
-androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
+androidx-compose-foundation = { group = "androidx.compose.foundation", name = "foundation" }
 androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
-androidx-compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
 
 # test
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
-androidx-test-core = { group = "androidx.test", name = "core-ktx", version.ref = "androidxTestCore" }
-androidx-test-ext-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidxTestExt" }
-kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
-turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine" }
-kotlin-reflect = { group = "org.jetbrains.kotlin", name = "kotlin-reflect", version.ref = "kotlin" }
 androidx-compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
 androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
+kotlin-reflect = { group = "org.jetbrains.kotlin", name = "kotlin-reflect", version.ref = "kotlin" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

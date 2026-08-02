@@ -2,14 +2,22 @@
 <resources>
     <!--
       Platform theme only. Compose supplies the real theming (ui/theme/Theme.kt).
+
       Parented to android:Theme.Material.Light so the app never inherits a dark
-      platform theme — iOS is light-mode only (PARITY.md §9 R8).
-      Deliberately NOT Theme.AppCompat.*: that requires the AppCompat dependency,
-      which this app does not use.
+      platform theme — iOS is light-mode only (PARITY.md §9 R8). Deliberately
+      NOT Theme.AppCompat.*: that requires the AppCompat dependency, which this
+      app does not use.
+
+      android:statusBarColor is deliberately absent. At targetSdk 35 Android 15+
+      ignores it, so setting it would be a no-op that reads as working
+      configuration. The bars are painted by enableEdgeToEdge() in MainActivity
+      instead, which works on every supported API level.
+
+      windowBackground still matters: it is what the system draws during cold
+      start, before Compose has painted anything.
     -->
     <style name="Theme.Memoria" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@color/paper</item>
-        <item name="android:statusBarColor">@color/paper</item>
         <item name="android:windowLightStatusBar">true</item>
     </style>
 </resources>
