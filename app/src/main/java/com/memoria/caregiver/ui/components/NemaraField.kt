@@ -1,0 +1,149 @@
+package com.memoria.caregiver.ui.components
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.unit.dp
+import com.memoria.caregiver.ui.theme.Card
+import com.memoria.caregiver.ui.theme.Ink
+import com.memoria.caregiver.ui.theme.Ink3
+import com.memoria.caregiver.ui.theme.Ink4
+import com.memoria.caregiver.ui.theme.Line
+import com.memoria.caregiver.ui.theme.NemaraType
+import com.memoria.caregiver.ui.theme.Radius
+import com.memoria.caregiver.ui.theme.Terra
+
+/**
+ * Labeled text field — an eyebrow above a card-tinted box.
+ * Spec: DesignSystem/Components/NemaraField.swift.
+ *
+ * The border state is the subtle part and it is **not** focus-driven: it darkens
+ * from `Line` to `Ink` when the field is NON-EMPTY, not when it is focused. The
+ * design renders both empty and filled examples and treats filled as the
+ * "engaged" tier. Wiring this to focus instead — the obvious Compose instinct —
+ * would look right in isolation and wrong on a filled form.
+ *
+ * Border width is 1.5dp, heavier than the 1dp used on cards and buttons.
+ *
+ * The caret is Terra explicitly. It would inherit Terra from
+ * `colorScheme.primary` anyway (see Theme.kt), but iOS sets it at this call site
+ * and stating it here keeps the field correct if the scheme is ever changed.
+ */
+@Composable
+fun NemaraField(
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    placeholder: String = "",
+    isSecure: Boolean = false,
+    keyboardType: KeyboardType = KeyboardType.Text,
+    capitalization: KeyboardCapitalization = KeyboardCapitalization.Sentences,
+    hint: String? = null,
+    trailing: (@Composable () -> Unit)? = null,
+) {
+    val keyboard = LocalSoftwareKeyboardController.current
+    val shape = RoundedCornerShape(Radius.md)
+
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        NemaraEyebrow(label)
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(shape)
+                .background(Card)
+                .border(
+                    width = 1.5.dp,
+                    // Non-empty, not focused. See the class doc.
+                    color = if (value.isEmpty()) Line else Ink,
+                    shape = shape,
+                )
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(modifier = Modifier.weight(1f)) {
+                if (value.isEmpty() && placeholder.isNotEmpty()) {
+                    Text(
+                        text = placeholder,
+                        style = NemaraType.bodyLarge,
+                        color = Ink4,
+                    )
+                }
+                BasicTextField(
+                    value = value,
+                    onValueChange = onValueChange,
+                    textStyle = NemaraType.bodyLarge.copy(color = Ink),
+                    cursorBrush = SolidColor(Terra),
+                    singleLine = true,
+                    visualTransformation =
+                        if (isSecure) PasswordVisualTransformation() else VisualTransformation.None,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = keyboardType,
+                        capitalization = capitalization,
+                        // iOS relabels Return to "Done" and dismisses on submit,
+                        // rather than floating a toolbar above the keyboard.
+                        imeAction = ImeAction.Done,
+                        autoCorrectEnabled = keyboardType != KeyboardType.Email,
+                    ),
+                    keyboardActions = KeyboardActions(onDone = { keyboard?.hide() }),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+
+            trailing?.invoke()
+        }
+
+        if (hint != null) {
+            Text(text = hint, style = NemaraType.caption, color = Ink3)
+        }
+    }
+}
+
+/**
+ * A single password rule and whether the current value satisfies it.
+ *
+ * Pulled out as pure logic so the five rules are Tier-1 testable without
+ * composing anything.
+ *
+ * **The character classes are ASCII, matching iOS exactly.** iOS uses the
+ * regexes `[A-Z]`, `[a-z]`, `\d` and `[^A-Za-z0-9]`, all ASCII-only. Kotlin's
+ * `Char.isLetterOrDigit()` is Unicode-aware, so writing the symbol rule that way
+ * would classify an accented letter as a letter on Android and as a symbol on
+ * iOS — the same password satisfying five rules on one platform and four on the
+ * other. Written out by range instead.
+ */
+data class PasswordRule(val label: String, val isSatisfied: Boolean)
+
+private fun Char.isAsciiAlphanumeric(): Boolean =
+    this in 'A'..'Z' || this in 'a'..'z' || this in '0'..'9'
+
+fun passwordRules(value: String): List<PasswordRule> = listOf(
+    PasswordRule("At least 8 characters", value.length >= 8),
+    PasswordRule("One uppercase letter", value.any { it in 'A'..'Z' }),
+    PasswordRule("One lowercase letter", value.any { it in 'a'..'z' }),
+    PasswordRule("One number", value.any { it in '0'..'9' }),
+    PasswordRule("One symbol", value.any { !it.isAsciiAlphanumeric() }),
+)
