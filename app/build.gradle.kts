@@ -1,17 +1,15 @@
-// Imported rather than fully qualified: inside the `unitTests.all { }` scope,
-// `java` resolves to the Java plugin extension, so `java.util.concurrent...`
-// fails to compile.
-import java.util.concurrent.atomic.AtomicLong
+import com.android.build.api.variant.HostTestBuilder
 
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
+    // No kotlin-android plugin: AGP 9.0+ has built-in Kotlin support and
+    // rejects it ("no longer required for Kotlin support since AGP 9.0").
     alias(libs.plugins.kotlin.compose)
 }
 
 android {
     namespace = "com.memoria.caregiver"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         // Deliberately NOT co.sunny.* — see DECISIONS.md D-006.
@@ -35,10 +33,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
-
     buildFeatures {
         compose = true
     }
@@ -53,36 +47,13 @@ android {
                     events("passed", "skipped", "failed")
                     exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
                 }
-                // HARNESS.md §7 requires a stated pass count, not just exit 0.
-                // Gradle prints nothing on success by default, which makes "all
-                // tests pass" unfalsifiable.
-                //
-                // On its own this does NOT cover the empty-source-set case, which
-                // is the case it was written for: Gradle skips the root-suite
-                // callback entirely when a task discovers no tests, so an empty
-                // source set prints nothing and exits 0 — indistinguishable from
-                // green. The counter plus the doLast below is what closes it.
-                // (Gradle's own failOnNoDiscoveredTests would be the one-liner,
-                // but it does not exist in Gradle 8.9.)
-                val discovered = AtomicLong(-1)
-                it.afterSuite(
-                    KotlinClosure2<TestDescriptor, TestResult, Unit>({ desc, result ->
-                        if (desc.parent == null) {
-                            discovered.set(result.testCount)
-                            println(
-                                "TEST SUMMARY: ${result.testCount} tests, " +
-                                    "${result.successfulTestCount} passed, " +
-                                    "${result.failedTestCount} failed, " +
-                                    "${result.skippedTestCount} skipped",
-                            )
-                        }
-                    }),
-                )
-                // `discovered` is read by the verifyUnitTestsRan finalizer below
-                // rather than a doLast here: with no test sources at all the task
-                // is NO-SOURCE and doLast never executes, which is exactly the
-                // case being guarded. Verified by mutation.
-                discovered.get()
+                // The pass-count summary and the ran-at-all guard both live in
+                // the verifyUnitTestsRan finalizer below, reading the results
+                // XML. Test.afterSuite would be the obvious place for the
+                // summary, but it is deprecated in Gradle 9 AND it never fires
+                // for a NO-SOURCE task — which is precisely the case the guard
+                // exists for. One mechanism that handles both beats two that
+                // each miss something.
             }
         }
     }
@@ -109,7 +80,8 @@ android {
 // gate wall time for nothing.
 androidComponents {
     beforeVariants(selector().withBuildType("release")) { variant ->
-        variant.enableUnitTest = false
+        // AGP 9 replaced the `enableUnitTest` property with the hostTests map.
+        variant.hostTests[HostTestBuilder.UNIT_TEST_TYPE]?.enable = false
     }
 }
 
@@ -131,7 +103,17 @@ val verifyUnitTestsRan = tasks.register("verifyUnitTestsRan") {
         val files = resultsDir.get().asFile
             .listFiles { f: File -> f.name.startsWith("TEST-") && f.name.endsWith(".xml") }
             ?: emptyArray()
-        val cases = files.sumOf { f -> Regex("<testcase\\s").findAll(f.readText()).count() }
+
+        var cases = 0
+        var failures = 0
+        var skipped = 0
+        files.forEach { f ->
+            val text = f.readText()
+            cases += Regex("<testcase\\s").findAll(text).count()
+            failures += Regex("<(failure|error)\\s").findAll(text).count()
+            skipped += Regex("<skipped\\s*/?>").findAll(text).count()
+        }
+
         if (cases == 0) {
             throw GradleException(
                 "No unit tests ran. An empty or misconfigured test source set " +
@@ -139,6 +121,14 @@ val verifyUnitTestsRan = tasks.register("verifyUnitTestsRan") {
                     "relies on being impossible.",
             )
         }
+
+        // HARNESS.md §7 requires a stated pass count, not just exit 0. Gradle
+        // prints nothing on success by default, which makes "all tests pass"
+        // unfalsifiable.
+        println(
+            "TEST SUMMARY: $cases tests, ${cases - failures - skipped} passed, " +
+                "$failures failed, $skipped skipped",
+        )
     }
 }
 
