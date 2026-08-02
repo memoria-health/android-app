@@ -86,6 +86,24 @@ private val MemoriaColorScheme = lightColorScheme(
     inverseOnSurface = Card,
     inversePrimary = TerraSoft,
     scrim = Ink,
+
+    // The "fixed" roles hold a colour that is identical in light and dark
+    // themes. This app is light-only, so they simply take the matching
+    // container tokens. They exist here because ThemeTest's reflection walk
+    // caught them the moment the Compose BOM that introduced them landed —
+    // twelve more lavenders that would otherwise have arrived silently.
+    primaryFixed = TerraSoft,
+    primaryFixedDim = TerraSoft,
+    onPrimaryFixed = TerraDeep,
+    onPrimaryFixedVariant = TerraDeep,
+    secondaryFixed = ActionSoft,
+    secondaryFixedDim = ActionSoft,
+    onSecondaryFixed = Ink,
+    onSecondaryFixedVariant = Ink2,
+    tertiaryFixed = SkySoft,
+    tertiaryFixedDim = SkySoft,
+    onTertiaryFixed = Ink,
+    onTertiaryFixedVariant = Ink2,
 )
 
 /**
