@@ -42,6 +42,24 @@ interface RealtimeCache {
     var camerasByPatient: Map<String, List<Camera>>
     var detectorsByPatient: Map<String, List<Detector>>
     var eventsByPatient: Map<String, List<DetectionEvent>>
+
+    /**
+     * Drops every cached collection. Called from [RealtimeStore.teardown] on
+     * sign-out, matching the four assignments at the end of the Swift
+     * `teardown()`.
+     *
+     * **This is a privacy boundary, not housekeeping.** Without it, one
+     * caregiver's patients, cameras, detectors and events stay in memory after
+     * they sign out — so the next person to sign in on the same device is one
+     * recomposition away from seeing a household they have no relationship to.
+     * A shared device is the normal case for a care team.
+     */
+    fun clear() {
+        patients = emptyList()
+        camerasByPatient = emptyMap()
+        detectorsByPatient = emptyMap()
+        eventsByPatient = emptyMap()
+    }
 }
 
 /**

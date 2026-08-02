@@ -130,6 +130,10 @@ class RealtimeStore(
     suspend fun teardown() {
         stopStatePolling()
         closeChannels()
+        // Swift teardown() ends by emptying patients, camerasByPatient,
+        // detectorsByPatient and eventsByPatient. Omitting it left the previous
+        // caregiver's whole roster live in memory across a sign-out.
+        cache.clear()
     }
 
     private suspend fun closeChannels() {

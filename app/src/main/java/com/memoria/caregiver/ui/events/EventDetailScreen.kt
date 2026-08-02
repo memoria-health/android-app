@@ -87,20 +87,32 @@ fun EventDetailScreen(
     // iOS: PatientEventsView attaches .trackScreen("event_detail") to this view
     // when it presents the sheet. Kept with the screen so the event cannot be
     // lost by a host that forgets to attach it.
-    LaunchedEffect(Unit) { analytics.logScreen("event_detail") }
-
     val event = state.event
+
+    // Keyed on the event id, not Unit. iOS presents this as a sheet and gets a
+    // fresh view identity per event, so it logs one screen view per event
+    // opened. Keyed on Unit, a host that swaps the presented event in place —
+    // a deep link arriving while the sheet is open, or next/previous
+    // navigation — logs the first event and then goes silent.
+    LaunchedEffect(event.id) { analytics.logScreen("event_detail") }
     val isSafety = event.category == Detector.Category.SAFETY
     val tone = if (isSafety) Terra else Sky
     val toneSoft = if (isSafety) TerraSoft else SkySoft
     val categoryLabel = if (isSafety) "SAFETY" else "ROUTINE"
 
-    // Deliberately a plain `remember`, and deliberately not hoisted into
-    // EventDetailState: the dignity cover must be back every single time this
-    // screen opens. `rememberSaveable` would survive process death and a hoisted
-    // flag would survive a re-present, and either would silently turn a
-    // dignity-first default into a one-time prompt.
-    var censoredRevealed by remember { mutableStateOf(false) }
+    // Deliberately a plain `remember`, deliberately KEYED ON THE EVENT ID, and
+    // deliberately not hoisted into EventDetailState. The dignity cover must be
+    // back for every event, every time.
+    //
+    // `rememberSaveable` would survive process death and a hoisted flag would
+    // survive a re-present — either turns a dignity-first default into a
+    // one-time prompt. **An unkeyed `remember` has the same effect across a
+    // single presentation**: iOS gets a fresh view identity per event, so
+    // revealing one censored clip and then moving to another re-covers it,
+    // whereas without the key the second event would open already uncovered.
+    // That is someone's parent on screen without the deliberate tap that is the
+    // entire point of the cover.
+    var censoredRevealed by remember(event.id) { mutableStateOf(false) }
 
     Column(modifier = modifier.fillMaxSize().background(Paper)) {
 

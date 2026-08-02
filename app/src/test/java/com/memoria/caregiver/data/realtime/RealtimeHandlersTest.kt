@@ -261,3 +261,76 @@ class RealtimeHandlersTest {
     /** Well-formed JSON, but missing every required column. */
     private fun undecodableRow(): JsonObject = buildJsonObject { put("id", "not-a-row") }
 }
+
+/**
+ * Sign-out must leave nothing of the previous caregiver behind.
+ *
+ * The Swift `teardown()` ends by emptying all four cached collections. The
+ * first Android port stopped the poll and closed the channels but kept the
+ * cache — so a caregiver's patients, cameras, detectors and events survived
+ * their own sign-out, and the next person to sign in on the same device was one
+ * recomposition away from a household they have no relationship to. A shared
+ * device is the normal case for a care team, so this is a privacy boundary
+ * rather than housekeeping.
+ */
+class RealtimeCacheClearTest {
+
+    private class FakeCache : RealtimeCache {
+        override var patients: List<com.memoria.caregiver.data.model.Patient> = emptyList()
+        override var camerasByPatient: Map<String, List<com.memoria.caregiver.data.model.Camera>> = emptyMap()
+        override var detectorsByPatient: Map<String, List<com.memoria.caregiver.data.model.Detector>> = emptyMap()
+        override var eventsByPatient: Map<String, List<com.memoria.caregiver.data.model.DetectionEvent>> = emptyMap()
+    }
+
+    /**
+     * The wiring, not just the helper: `teardown()` must be the thing that
+     * clears. An earlier version of this test called `clear()` directly, so
+     * deleting the call from `teardown()` left it green — it proved the method
+     * worked while the bug it was written for went unnoticed.
+     *
+     * A SupabaseClient is constructed but never connected. With no channels
+     * open and no poll running, teardown's other two steps iterate empty
+     * collections, so this exercises the real method offline.
+     */
+    @org.junit.Test
+    fun `teardown clears the cache`() = kotlinx.coroutines.test.runTest {
+        val cache = FakeCache().apply {
+            patients = listOf(Fx.patient("p1"))
+            camerasByPatient = mapOf("p1" to listOf(Fx.camera("c1")))
+        }
+        val store = RealtimeStore(
+            supabase = io.github.jan.supabase.createSupabaseClient(
+                supabaseUrl = "https://example.supabase.co",
+                supabaseKey = "test-anon-key",
+            ) { install(io.github.jan.supabase.realtime.Realtime) },
+            cache = cache,
+            fetcher = { emptyList() },
+            live = CameraLiveState(InMemoryEverOnlineStore()),
+            scope = this,
+            dispatcher = kotlin.coroutines.EmptyCoroutineContext,
+            log = {},
+        )
+
+        store.teardown()
+
+        org.junit.Assert.assertTrue("patients survived teardown", cache.patients.isEmpty())
+        org.junit.Assert.assertTrue("cameras survived teardown", cache.camerasByPatient.isEmpty())
+    }
+
+    @org.junit.Test
+    fun `clear empties every cached collection`() {
+        val cache = FakeCache().apply {
+            patients = listOf(Fx.patient("p1"))
+            camerasByPatient = mapOf("p1" to listOf(Fx.camera("c1")))
+            detectorsByPatient = mapOf("p1" to listOf(Fx.detector("d1")))
+            eventsByPatient = mapOf("p1" to listOf(Fx.event("e1")))
+        }
+
+        cache.clear()
+
+        org.junit.Assert.assertTrue("patients survived sign-out", cache.patients.isEmpty())
+        org.junit.Assert.assertTrue("cameras survived sign-out", cache.camerasByPatient.isEmpty())
+        org.junit.Assert.assertTrue("detectors survived sign-out", cache.detectorsByPatient.isEmpty())
+        org.junit.Assert.assertTrue("events survived sign-out", cache.eventsByPatient.isEmpty())
+    }
+}

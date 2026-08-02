@@ -2,10 +2,13 @@ package com.memoria.caregiver.ui.events
 
 import androidx.compose.material3.Text
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.memoria.caregiver.analytics.LocalAnalytics
@@ -164,5 +167,53 @@ class EventDetailScreenTest {
                 it.type == "screen" && it.name == "event_detail"
             },
         )
+    }
+}
+
+/**
+ * The dignity cover must re-cover when the presented event changes in place.
+ *
+ * iOS presents this as a sheet with a fresh view identity per event, so
+ * `censoredRevealed` starts false every time. An unkeyed `remember` on Android
+ * survives a swap of the presented event — so a caregiver who reveals one
+ * censored clip and then moves to another sees the second one already
+ * uncovered. That is someone's parent on screen without the deliberate tap the
+ * cover exists to require.
+ */
+@org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE)
+@org.junit.runner.RunWith(org.robolectric.RobolectricTestRunner::class)
+class EventDetailCoverResetTest {
+
+    @get:org.junit.Rule val compose = androidx.compose.ui.test.junit4.createComposeRule()
+
+    @org.junit.Test
+    fun `revealing one censored event does not uncover the next`() {
+        val first = sampleEvent(id = "e1", clipCensored = true)
+        val second = sampleEvent(id = "e2", clipCensored = true)
+        var shown by androidx.compose.runtime.mutableStateOf<com.memoria.caregiver.data.model.DetectionEvent>(first)
+
+        compose.setContent {
+            com.memoria.caregiver.ui.theme.MemoriaTheme {
+                EventDetailScreen(
+                    state = EventDetailState(event = shown, clip = ClipState.Loaded("https://x/clip.mp4")),
+                    onBack = {},
+                    onReviewEvent = {},
+                    clipPlayer = {},
+                )
+            }
+        }
+
+        // Reveal the first event's clip.
+        compose.onNodeWithText("View video").performScrollTo().performClick()
+        compose.onAllNodesWithText("View video").fetchSemanticsNodes().let {
+            org.junit.Assert.assertEquals("the cover did not lift", 0, it.size)
+        }
+
+        // Swap the presented event without leaving the composition.
+        shown = second
+        compose.waitForIdle()
+
+        compose.onNodeWithText("View video")
+            .assertExists("the cover did not come back for the next event")
     }
 }
