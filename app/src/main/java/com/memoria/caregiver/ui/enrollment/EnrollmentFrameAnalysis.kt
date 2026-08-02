@@ -328,6 +328,20 @@ fun indexOfLargestBox(boxes: List<Rect>): Int {
  * (`0.114 B + 0.587 G + 0.299 R`). Here the camera hands over a luma plane,
  * which already carries that same weighting, so the weights do not reappear.
  * The sample grid — `max(1, size / 24)` on each axis — is carried exactly.
+ *
+ * **The weighting matches; the RANGE may not, and that is unresolved.** iOS
+ * computes over full-range BGRA, so its result spans 0…255. Most Android camera
+ * pipelines emit a studio-swing luma plane spanning 16…235. Dividing by 255
+ * either way, the same room reads **brighter** here: a scene iOS scores at the
+ * 0.28 dark floor arrives as roughly 0.30, so the "too dark" coaching fires
+ * later than it does on iOS, or not at all.
+ *
+ * Deliberately NOT corrected yet. The obvious fix — `(y - 16) / 219` — is only
+ * right if the plane really is studio-swing, and Android exposes no API that
+ * says which range a given device's pipeline emits. Applying it blind would
+ * introduce a comparable error on any device that emits full range. Measuring a
+ * known target on real hardware settles it in minutes and settles it correctly.
+ * Tracked as FINDINGS.md F-3, under REQ-4.
  */
 fun sceneLuma(frame: EnrollmentFrame): Float {
     val width = frame.width

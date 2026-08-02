@@ -219,5 +219,42 @@ installable on a device without one; iOS does not gate installation either.
 
 ---
 
+## D14 — The render watchdog's two inputs are re-derived, not ported
+**Category:** platform mechanism differs
+**Required by:** `PARITY.md` §12 and `QUESTIONS.md` Q3, both of which say the
+Android mechanism must be recorded here because only the *intent* ports.
+
+**The intent, which is identical:** a live tile that has gone black repairs
+itself within ~2s, and a healthy tile is never disturbed.
+
+**iOS:** reads `VideoView.isRendering`, polls it on a `Timer`, and re-attaches
+with `view.track = nil; view.track = track`. Both inputs come free from the
+platform: the property exists, and the timer simply stops firing while the app
+is suspended.
+
+**Android:** neither input exists, so each is rebuilt.
+
+1. **"Is it rendering."** `SurfaceViewRenderer` exposes no such property. A
+   second, counting `VideoSink` is attached to the same track, and "rendering"
+   means the frame count advanced since the previous poll.
+2. **The poll's lifecycle.** A coroutine keeps running while the app is
+   backgrounded, where frames legitimately stop. An unscoped poll would read a
+   backgrounded tile as stalled and "repair" it on a loop. The poll therefore
+   runs only while the lifecycle is at least STARTED — which is the faithful
+   port of what iOS's `Timer` does implicitly, not an Android addition.
+
+The repair is the Android shape of the same two lines: detach both sinks,
+release the renderer's EGL surface, re-initialise against the room's EGL
+context, re-attach. It only ever runs against a tile that is already black, so
+the one visible transition is black to video.
+
+**Why the mechanism had to change at all:** iOS needs the watchdog because it
+reclaims the Metal surface on background. Android's surface lifecycle is
+different, so the *trigger* is not the same event — which is precisely why the
+port is by intent. Whether the Android failure actually occurs, and how often,
+is unproven without REQ-2 and a physical device.
+
+---
+
 _(Add entries as they arise. Cosmetic gaps found in the Phase 8 screenshot pass
 go here too, each with a reason or a fix.)_

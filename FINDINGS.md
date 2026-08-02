@@ -34,7 +34,7 @@ into a file — is the finding that matters most here.**
 ## OPEN
 
 ### F-3 — Scene luma is measured on a different scale than iOS
-**Phase 6 · Important · not yet re-verified**
+**Phase 6 · Important · CONFIRMED 2026-08-02 · needs a device to fix correctly**
 
 Enrollment reads brightness from the YUV luma plane, which is studio-swing
 (16–235) on most devices, where iOS applies a full-range Rec.601 weighting to
@@ -47,25 +47,55 @@ enrollment accepts frames in light iOS would have rejected — silently degradin
 the face gallery that everything downstream depends on.
 
 Related to REQ-18 / Q2, but distinct: that is about the *quality* metric, this
-is about *brightness*, which ports 1:1 on iOS and does not here.
+is about *brightness*, which the port assumed transferred 1:1 and does not.
+
+**The arithmetic.** A scene iOS scores at exactly the 0.28 dark floor is luma
+71/255. The same scene on a studio-swing plane reads `16 + 0.28 x 219 = 77`, or
+0.30 — above the floor. The warning fires late, or never.
+
+**Verified in source.** `sceneLuma` in `ui/enrollment/EnrollmentFrameAnalysis.kt`
+divides the raw plane value by 255. The comment above it addressed the Rec.601
+*weighting* (which genuinely does transfer) and said nothing about *range*,
+which is the half that does not — so the code read as checked when it was not.
+That comment now states the gap.
+
+**Deliberately not fixed blind.** `(y - 16) / 219` is right only if the plane is
+studio-swing, and Android exposes no API for which range a device emits.
+Applying it unconditionally trades this error for a comparable one on
+full-range devices. Pointing a camera at a known target settles it in minutes.
+Folded into REQ-4.
 
 ---
 
-### F-4 — `allFrames()` thread race
-**Phase 6 · Important · not yet re-verified**
+### F-4 — `allFrames()` thread race — DOWNGRADED, latent not live
+**Phase 6 · Minor · verified 2026-08-02**
 
-Reported as an unsynchronised read of the retained-frame collection while the
-camera thread writes it. Needs confirmation against the current source before
-it is acted on.
+Not a live defect. `EnrollmentCamera` posts `ingest` and `noteFaceLost` to the
+main executor (`mainExecutor.execute { ... }`), which is exactly the
+single-thread confinement `FaceCoverageModel`'s threading note requires, and
+`allFrames()` has no production caller at all — only tests.
+
+It stays open because the contract is load-bearing and invisible: the upload
+path that will call `allFrames()` has not been written, and if it reads from a
+background thread while the analyzer feeds the model, the race the reviewer
+described becomes real. The fix is to honour the confinement when that code
+lands, not to add a lock now. Belongs with F-10.
 
 ---
 
-### F-5 — `EnrollmentCoverageSink` is never wired
-**Phase 6 · Important · not yet re-verified**
+### F-5 — `EnrollmentCoverageSink` has no implementation, so the camera cannot be built
+**Phase 6 · Important · CONFIRMED and sharpened 2026-08-02**
 
-Same shape as H-12 and D8: a real, tested component with no caller. Resolves
-either as dead-by-design (delete it) or as part of the integration work — see
-F-10, which is the same defect at the scale of the whole app.
+More precise than reported. The sink is not "unwired" — `EnrollmentCamera`
+takes one as a constructor parameter and calls it correctly. The problem is that
+**nothing anywhere implements the interface**, in `main` or in test.
+`FaceCoverageModel` has all three matching methods and does not declare the
+interface, so the two halves were built to meet and never joined.
+
+`EnrollmentCamera` therefore cannot be constructed, which means face enrollment
+cannot run. Exactly the shape of H-12 (`PersonDetector`) and D8: every part real
+and tested, the seam between them missing. The adapter is a few lines; that it
+is absent is what F-10 is about.
 
 ---
 
@@ -76,15 +106,6 @@ Q2 records that the model ports 1:1. Reviewers found five places where it does
 not. Either they are justified and belong in `DIFFERENCES.md`, or they are
 parity bugs. Undocumented divergence in the one file whose whole premise is
 "this ports unchanged" is the problem regardless of which.
-
----
-
-### F-7 — The render watchdog has no `DIFFERENCES.md` entry
-**Phase 4 · Minor · verified as absent 2026-08-02**
-
-`PARITY.md §12` and `QUESTIONS.md` Q3 both explicitly require the Android
-watchdog mechanism to be recorded, because the intent was ported and the
-mechanism re-derived. No entry exists.
 
 ---
 
@@ -126,6 +147,17 @@ the largest single piece of work remaining.
 ---
 
 ## RESOLVED
+
+### F-7 — The render watchdog has no `DIFFERENCES.md` entry
+**Phase 4 · Minor · FIXED 2026-08-02**
+
+Written up as `DIFFERENCES.md` D14: the counting `VideoSink` that substitutes
+for iOS's `VideoView.isRendering`, and the lifecycle scoping that substitutes
+for a `Timer` that stops firing when the app suspends. The source comments were
+already thorough — the entry was the missing part, and `PARITY.md` §12 requires
+it because only the intent ports.
+
+---
 
 ### F-1 — Two loudspeaker implementations, at two layers, with contradictory rules
 **Phase 4 · Important · FIXED 2026-08-02**
