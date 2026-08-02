@@ -25,18 +25,30 @@ import androidx.compose.runtime.Composable
  * palette.
  */
 private val MemoriaColorScheme = lightColorScheme(
-    primary = Action,
-    onPrimary = ActionInk,
-    primaryContainer = ActionSoft,
-    onPrimaryContainer = Ink,
+    // primary is Terra, NOT Action. Material3 collapses two roles iOS keeps
+    // separate: the primary CTA fill and the app-wide control accent. iOS sets
+    // the accent globally — AccentColor.colorset is #A04331 and
+    // App/NemaraCaregiverApp.swift:71 applies .tint(NemaraColor.terra) to the
+    // root — and everything that tints from it (caret, focused field indicator,
+    // switches, sliders, selection handles) is rust.
+    //
+    // The CTA fill is unaffected by this choice because NemaraButton does not
+    // read colorScheme at all; it resolves its colors from the variant enum. So
+    // pointing primary at Terra costs nothing on the CTA axis and fixes the
+    // accent axis. NemaraField.swift:60 tints its caret terra explicitly,
+    // which is the same requirement.
+    primary = Terra,
+    onPrimary = TerraInk,
+    primaryContainer = TerraSoft,
+    onPrimaryContainer = TerraDeep,
 
-    secondary = Terra,
-    onSecondary = TerraInk,
-    secondaryContainer = TerraSoft,
-    onSecondaryContainer = TerraDeep,
+    secondary = Action,
+    onSecondary = ActionInk,
+    secondaryContainer = ActionSoft,
+    onSecondaryContainer = Ink,
 
     tertiary = Sky,
-    onTertiary = Card,
+    onTertiary = TerraInk,
     tertiaryContainer = SkySoft,
     onTertiaryContainer = Ink,
 
@@ -54,6 +66,26 @@ private val MemoriaColorScheme = lightColorScheme(
 
     outline = Line,
     outlineVariant = Line,
+
+    // Material3 defines 36 roles. Any left unset keeps the Material baseline,
+    // which is lavender — and the roles most likely to be hit are exactly the
+    // ones stray components read: DropdownMenu and ModalBottomSheet take
+    // surfaceContainer / surfaceContainerLow, Snackbar takes inverseSurface,
+    // the date and time pickers take surfaceContainerHigh. Phase 5 is full of
+    // sheets, so leaving these would put lavender-tinted neutrals inside a
+    // cream app. Every role is pinned to the Memoria palette; ThemeTest asserts
+    // no baseline color survives.
+    surfaceContainerLowest = Card,
+    surfaceContainerLow = Card,
+    surfaceContainer = Card,
+    surfaceContainerHigh = CardAlt,
+    surfaceContainerHighest = CardAlt,
+    surfaceBright = Card,
+    surfaceDim = PaperDim,
+    inverseSurface = Ink,
+    inverseOnSurface = Card,
+    inversePrimary = TerraSoft,
+    scrim = Ink,
 )
 
 /**

@@ -99,6 +99,10 @@ dependencies {
     testImplementation(libs.androidx.test.ext.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.turbine)
+    // Test-only: lets ThemeTest walk every Material3 color role by reflection,
+    // so a Material version that ADDS a role fails the palette test instead of
+    // silently shipping a baseline lavender.
+    testImplementation(libs.kotlin.reflect)
     testImplementation(platform(libs.androidx.compose.bom))
     testImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
