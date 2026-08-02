@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Debug-only manifest overlay.
+
+  Its whole job is to point the application at res/xml/network_security_config.xml.
+  That file already existed in the debug source set but nothing referenced it,
+  which made it inert: Android only reads a network security config when the
+  manifest names one, so debug builds were still getting the platform default
+  (cleartext denied at targetSdk 35) and could not reach the local backend at
+  10.0.2.2 at all.
+
+  It lives here rather than in the main manifest so the release build never
+  merges it. A release APK that shipped a cleartext allowance would be a real
+  security regression, and the source set boundary makes that impossible rather
+  than merely unlikely.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <application
+        android:networkSecurityConfig="@xml/network_security_config"
+        tools:replace="android:networkSecurityConfig" />
+
+</manifest>

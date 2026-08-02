@@ -1,0 +1,69 @@
+package com.memoria.caregiver.data
+
+/**
+ * Per-developer overrides for [AppConfig]. TEMPLATE — copy, do not edit in place:
+ *
+ *   cp app/src/main/java/com/memoria/caregiver/data/LocalAppConfig.kt.template \
+ *      app/src/main/java/com/memoria/caregiver/data/LocalAppConfig.kt
+ *
+ * The copy is gitignored, so your home network address can never reach a commit.
+ * This template is committed; the real file never is. (`DIFFERENCES.md D3`.)
+ *
+ * All values null means "no override", which is also what happens when the file
+ * does not exist at all. [AppConfig] then falls through to the environment
+ * variables, then the debug fallback, then the release constants.
+ *
+ * **Debug builds only.** A release build never reads this file, because it lives
+ * only on the machine that cut the build and pointing production at a developer's
+ * Mac is exactly the failure this rule prevents.
+ *
+ * Keep it a plain `object` with plain `val` properties. [AppConfig] finds it by
+ * name at runtime — it has to, because a fresh clone does not have the file and a
+ * direct reference would not compile — and it reads the standard Kotlin property
+ * getters. `@JvmField`, `@JvmStatic` or turning it into a `class` removes those
+ * getters and the overrides go silently unread.
+ *
+ * Adding a field to the template does not break anyone's older copy: a field
+ * this file does not define resolves to null, meaning "no override".
+ */
+object LocalAppConfig {
+
+    /**
+     * Override for `AppConfig.supabaseUrl`. Local Supabase serves its API on
+     * port 54341 after `supabase start`.
+     *
+     * Use your machine's LAN IP, not a `.local` hostname: Android does not
+     * resolve Bonjour names without `NsdManager` (`DIFFERENCES.md D4`). On the
+     * emulator, 10.0.2.2 already reaches the host machine's loopback, which is
+     * the default, so you only need this on a physical device.
+     *
+     * Typical value: "http://192.168.1.42:54341"
+     */
+    val supabaseUrl: String? = null
+
+    /**
+     * Override for `AppConfig.supabaseAnonKey`. The well-known local publishable
+     * key works for every developer's `supabase start`, so leave this null
+     * unless you are pointing at a Supabase project that is not local.
+     */
+    val supabaseAnonKey: String? = null
+
+    /**
+     * Override for `AppConfig.backendUrl`. Your local uvicorn, either directly
+     * on your LAN IP or published through a tunnel.
+     *
+     * Typical value: "http://192.168.1.42:8002"
+     *
+     * Plain HTTP to a private address works in debug builds only, and only for
+     * the hosts listed in `app/src/debug/res/xml/network_security_config.xml`.
+     * Add your IP there if the app cannot reach your machine.
+     */
+    val backendUrl: String? = null
+
+    /**
+     * Override for `AppConfig.enableClipCapture`. Set true to show the
+     * "Capture 15s clip" data-collection button on the live tile. Null means
+     * use the default, which is off. Release builds force this off regardless.
+     */
+    val enableClipCapture: Boolean? = null
+}
