@@ -119,11 +119,32 @@
 
 ## Accepted risks
 
-- **Device validation deferred to day 9-10** (Aryaman 2026-08-01). Phases 4 and 6
-  are the two highest-risk phases AND the two that cannot be verified without a
-  real device, real camera, and a real face. Everything else in those phases is
-  compile-verified only until day 9. If they fail late, there is no runway to
-  redesign — only to cut scope.
+- ~~**Device validation deferred to day 9-10**~~ — **LARGELY RETIRED 2026-08-01.**
+  The original framing was that phases 4 and 6 "cannot be verified without a real
+  device, real camera, and a real face", so everything would be compile-verified
+  only until day 9, with no runway to redesign if it failed late.
+
+  That was wrong about the Android Emulator, which unlike the iOS Simulator is a
+  full VM running the real OS. Verified on `nemara_pixel`: the app installs and
+  runs, the host backend is reachable at `10.0.2.2`, and both cameras are now
+  present after fixing the AVD (it had shipped with `hw.camera.front = none`,
+  which would have made enrollment untestable). `-camera-front videofile:` feeds
+  a recorded clip as the camera, so the enrollment coverage model is testable
+  deterministically and repeatably.
+
+  **What genuinely still needs hardware — the whole list:**
+  1. Blur performance at video frame rates (emulated GPU gives no usable signal)
+  2. A real Tapo camera and gateway on the LAN
+  3. Sensor Wi-Fi AP join (Q5) — no real Wi-Fi stack in the emulator
+  4. Enrollment quality-metric calibration (Q2) — real faces, real light
+
+  Items 1 and 4 are tuning, not correctness, so they fail *gradually* rather than
+  catastrophically. That is the actual risk reduction: late failure now means
+  "the blur is too slow" or "the threshold is off", not "the architecture is
+  wrong". See `HARNESS.md §4b`.
+
+- **Emulator perf is not device perf.** Nothing measured on the emulator counts
+  as a performance result. Frame rates, blur cost and battery are day 9-10.
 - **Repo lives under the cloud-synced tree** (Aryaman 2026-08-01). Known to abort
   merge/checkout/rebase via OneDrive/iCloud stat races; workaround is `update-ref`
   plumbing.

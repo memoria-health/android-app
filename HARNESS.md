@@ -120,6 +120,82 @@ done.
 
 ---
 
+## 4b. End-to-end testing: the emulator
+
+**The Android Emulator is the iOS Simulator's counterpart, and it is a stronger
+tool.** The difference is architectural and it works in our favour:
+
+| | iOS Simulator | Android Emulator |
+|---|---|---|
+| What it is | your app built for the **host** arch, against a shim | a **real Android OS** in a QEMU VM |
+| Framework | simulator-specific reimplementation | the actual framework, Binder, HALs |
+| Camera | limited | virtual scene, host webcam, **image or video file** |
+| Consequence | many things "need a real device" | most things do not |
+
+On Apple Silicon the arm64 system image runs natively. Our AVD `nemara_pixel`
+cold-boots in ~25s, and the app installs and launches.
+
+### What this changes
+
+`nemara_pixel` was originally configured with **`hw.camera.front = none`** and
+GPU disabled — so face enrollment, which self-enrolls on the *front* camera,
+could not have been exercised at all. Now configured: both cameras `emulated`,
+`hw.gpu.mode = host`, 4 GB RAM, audio in and out.
+
+Crucially, `-camera-front videofile:<path>` renders a **video file as the camera
+feed**. A single recorded clip of a face turning through the yaw range drives the
+entire enrollment coverage model deterministically, in CI, with no human and no
+device. That is a repeatable test of the thing I had written off as
+device-only.
+
+### Capability matrix for the risky phases
+
+| Capability | Emulator | Notes |
+|---|---|---|
+| Backend over HTTP | **yes** | host is `10.0.2.2` from the guest — verified by ping |
+| Supabase Realtime, WebSockets | **yes** | ordinary networking |
+| LiveKit video playback | **yes** | software decode; correctness yes, performance no |
+| Talk mode mic capture | **yes** | `hw.audioInput = yes`, host mic passthrough |
+| Face enrollment | **yes** | `-camera-front videofile:` with a scripted clip |
+| FCM push | **yes** | Google APIs image carries Play services |
+| Deep links | **yes** | `adb shell am start -a android.intent.action.VIEW -d "nemara://…"` |
+| Screenshot parity | **yes** | `adb exec-out screencap -p` |
+| Rotation, locale, font scale, dark mode | **yes** | all injectable via `adb` |
+| **Blur at video frame rates** | **no** | emulated GPU gives no usable perf signal |
+| **Real Tapo camera / gateway on LAN** | **no** | needs the real appliance |
+| **Sensor Wi-Fi AP join (Q5)** | **no** | no real Wi-Fi stack |
+| **Enrollment quality calibration** | **no** | needs real faces in real light |
+
+### The ladder
+
+```
+Tier 0  compile          ./gradlew assembleDebug
+Tier 1  JVM unit         ./gradlew test                    ← the risk register
+Tier 2  Robolectric      (same command)                    ← component behavior
+Tier 3  instrumented     ./gradlew connectedDebugAndroidTest   ← emulator, real framework
+Tier 4  scripted E2E     adb-driven flow + screenshots     ← full journeys
+Tier 5  physical device  the four rows marked "no" above
+```
+
+Tiers 3 and 4 run on the emulator and belong in CI. **Tier 5 shrinks to four
+things**, which is the point: it is no longer "phases 4 and 6 are unverifiable
+until day 9."
+
+### Standing commands
+
+```bash
+export ANDROID_HOME=~/Library/Android/sdk
+$ANDROID_HOME/emulator/emulator -avd nemara_pixel -no-snapshot-load -no-boot-anim &
+adb wait-for-device
+./gradlew installDebug
+adb exec-out screencap -p > shot.png
+
+# enrollment, deterministic:
+emulator -avd nemara_pixel -camera-front videofile:$PWD/testdata/face-yaw-sweep.mp4
+```
+
+---
+
 ## 5. Escalation — exactly what stops the machine
 
 Aryaman's standing instruction is to surface design choices before implementing.

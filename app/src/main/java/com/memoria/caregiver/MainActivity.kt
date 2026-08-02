@@ -43,7 +43,13 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             MemoriaTheme {
-                Surface(modifier = Modifier.fillMaxSize()) {
+                // Paper, not the Material `surface` role. Surface defaults to
+                // colorScheme.surface, which is Card — the RAISED card token.
+                // iOS backs the app with Paper and puts Card on cards, so a
+                // default Surface would flatten that distinction everywhere.
+                // Caught on the first emulator screenshot: the body read
+                // lighter than the status bar.
+                Surface(modifier = Modifier.fillMaxSize(), color = Paper) {
                     Box(modifier = Modifier.safeDrawingPadding()) {
                         Text("Memoria")
                     }
