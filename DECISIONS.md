@@ -151,4 +151,88 @@ a real test failure.
 
 ---
 
+## D-010 — Edge-to-edge is explicit, insets consumed at the root
+**Date:** 2026-08-01 · **Reversal cost:** high after Phase 3 (every screen inherits it)
+
+At `targetSdk 35`, Android 15+ **enforces** edge-to-edge and ignores
+`android:statusBarColor`. The scaffold had that attribute set, which read as
+working configuration but was a no-op on the newest devices, and nothing handled
+insets — so the first real screen would have drawn under the status bar.
+
+**Decided:** `enableEdgeToEdge()` in `MainActivity` with light scrims on both
+bars (light-only app, so dark icons on Paper is the only correct combination),
+and insets consumed once at the root via `safeDrawingPadding()`. That is the
+Android equivalent of SwiftUI's implicit safe area, which every ported screen
+assumes.
+
+**Convention for phases 2-8:** screens inherit root inset padding. A screen that
+deliberately bleeds under a bar — live video is the expected case — opts out
+locally rather than the root opting out globally.
+
+---
+
+## D-011 — Gradle build directory lives outside the repo
+**Date:** 2026-08-01 · **Reversal cost:** none
+
+**This was not preventative; the build was already broken by it.** `./gradlew
+test` failed with `Failed file name validation for .../fraunces_144_soft_medium
+2.ttf` — a file the source tree never contained. iCloud had duplicated it inside
+`packaged_res`, and `merged_res` held dozens of `" 2"` copies of `.flat` files.
+
+Build output now goes to `~/.gradle-builds/memoria-caregiver-android`, overridable
+with `-Pmemoria.buildDir=`. Redirecting is more reliable than asking every
+developer to configure a sync exclusion, and it removes the churn the sync layer
+reacts to.
+
+The workspace `CLAUDE.md` documents cloud sync aborting git operations. Same
+hazard, reaching the build.
+
+---
+
+## D-012 — Toolchain bumped to current stable on day one
+**Date:** 2026-08-01 · **Reversal cost:** low (one commit, isolated)
+
+The scaffold was pinned ~20 months stale: Compose BOM 2024.10.01 against a
+current 2026.06.01, AGP 8.7.3 against 9.3.1, Kotlin 2.0.21 against 2.4.10.
+
+**Options:** (a) bump now; (b) defer to Phase 2 or later.
+
+**Chose (a)**, on a throwaway branch so abandoning was cheap. Doing it now cost
+one commit with 83 tests as the net. Deferring would have meant a whole-toolchain
+bump plus a Compose API sweep **in the middle of porting the API client**, since
+Ktor and supabase-kt both track recent Kotlin.
+
+Four things changed, none deep: AGP 9 has built-in Kotlin and rejects the
+`kotlin-android` plugin; `variant.enableUnitTest` became the `hostTests` map;
+Gradle 9 deprecated `Test.afterSuite`; `compileSdk` had to go to 36 because
+`navigationevent 1.0.0` requires it. `targetSdk` stays 35 — compiling against a
+newer SDK is independent of opting into its runtime behavior.
+
+**The reflection-based palette test justified itself here.** The new Compose BOM
+adds twelve "fixed" color roles that default to Material lavender; the test
+failed and named all twelve. An enumerated test would have passed and shipped
+them.
+
+---
+
+## D-013 — Release unit tests disabled; the gate is the debug suite
+**Date:** 2026-08-01 · **Reversal cost:** none
+
+`./gradlew test` — the gate `HARNESS.md §7` mandates — **had never passed.** Only
+`testDebugUnitTest` was ever run, and that count was reported as if it were the
+gate.
+
+Compose UI tests need an activity to host the composition, supplied by
+`ui-test-manifest`: a manifest-only artifact that is `debugImplementation` by
+design, because shipping a test activity in a release build is not wanted. So the
+release variant has no `ComponentActivity` and every `createComposeRule()` test
+died with "Unable to resolve activity for Intent".
+
+**Decided:** disable release unit tests. They add no coverage — same Kotlin, same
+resources, minification off — and running the suite twice doubled gate wall time.
+The alternative, putting `ui-test-manifest` on release, pollutes the shipped app
+to satisfy a redundant suite.
+
+---
+
 _(Append as decisions are made. Never delete; mark REVERSED with the date.)_

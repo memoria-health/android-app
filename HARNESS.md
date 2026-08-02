@@ -169,10 +169,20 @@ The repo is fresh, has no deployed code, and lives under a cloud-synced tree.
 
 ## 7. Phase-end checklist
 
-Every phase, no exceptions:
+Every phase, no exceptions. **Run the exact commands below** — the first time
+this checklist was used, the mandated command had never actually been run and a
+narrower one was reported in its place.
+
+```bash
+export JAVA_HOME=~/Library/Java/temurin17/Contents/Home
+export ANDROID_HOME=~/Library/Android/sdk
+./gradlew test assembleDebug
+```
 
 - [ ] `./gradlew assembleDebug` — exit 0, output pasted
-- [ ] `./gradlew test` — pass count stated, 0 failures
+- [ ] `./gradlew test` — pass count stated, 0 failures. Release unit tests are
+      disabled (`DECISIONS.md` D-013), so this is the debug suite; the build fails
+      if zero tests ran, so a printed count is real.
 - [ ] Every risk-register item touched this phase has a named test
 - [ ] Screenshot parity pass for every screen added
 - [ ] `DECISIONS.md`, `DIFFERENCES.md`, `QUESTIONS.md` current
