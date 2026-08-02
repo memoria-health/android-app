@@ -5,13 +5,12 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
+import com.memoria.caregiver.ui.gallery.ComponentGallery
 import com.memoria.caregiver.ui.theme.MemoriaTheme
 import com.memoria.caregiver.ui.theme.Paper
 
@@ -50,9 +49,7 @@ class MainActivity : ComponentActivity() {
                 // Caught on the first emulator screenshot: the body read
                 // lighter than the status bar.
                 Surface(modifier = Modifier.fillMaxSize(), color = Paper) {
-                    Box(modifier = Modifier.safeDrawingPadding()) {
-                        Text("Memoria")
-                    }
+                    ComponentGallery(modifier = Modifier.safeDrawingPadding())
                 }
             }
         }

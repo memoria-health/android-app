@@ -47,15 +47,15 @@
 > `REQUIREMENTS.md`, referenced as `REQ-n` at the call site so a deferral cannot
 > be silently forgotten.
 
-## Phase 1 — scaffold + design system
+## Phase 1 — scaffold + design system — **COMPLETE 2026-08-02**
 
-- [ ] Gradle project, version catalog, module layout.
-- [ ] Design system BEFORE any screen: 22 color tokens, 3 font families
+- [x] Gradle project, version catalog, module layout.
+- [x] Design system BEFORE any screen: 22 color tokens, 3 font families
       (Fraunces, Inter, JetBrains Mono), spacing + radius scales.
-- [ ] 11 shared components: NemaraButton, NemaraCard, NemaraField, NemaraChip,
+- [x] 11 shared components: NemaraButton, NemaraCard, NemaraField, NemaraChip,
       NemaraToggle, NemaraAvatar, NemaraPulse, NemaraWaveform, NemaraMark,
       NemaraEyebrow, CountryPicker (+ PatientAvatar, NemaraCamFeedPlaceholder).
-- [ ] Verify: component gallery screen, screenshotted against iOS.
+- [x] Verify: component gallery screen, screenshotted against iOS.
 
 ## Phase 2 — networking + auth
 
