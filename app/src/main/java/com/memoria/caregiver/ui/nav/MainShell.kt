@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -17,7 +19,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.dp
+import com.memoria.caregiver.ui.theme.NemaraType
 import com.memoria.caregiver.analytics.LocalAnalytics
 import com.memoria.caregiver.ui.home.EmptyRosterScreen
 import com.memoria.caregiver.ui.home.RosterScreen
@@ -111,8 +115,16 @@ fun MainShell(
                             // (HARDENING.md H-10).
                             analytics.logScreen(entry.analyticsName)
                         },
-                        icon = { Text(entry.title) },
-                        label = null,
+                        // Icon AND label, as iOS's `Label(title, systemImage:)`
+                        // renders. It was text-only in the icon slot (F-13).
+                        icon = {
+                            Icon(
+                                imageVector = entry.glyph,
+                                contentDescription = null,
+                                modifier = Modifier.size(22.dp),
+                            )
+                        },
+                        label = { Text(entry.title, style = NemaraType.caption) },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = Ink,
                             unselectedIconColor = Ink3,
@@ -169,7 +181,11 @@ fun MainShell(
 }
 
 /** The two top-level tabs. iOS: `MainTabView.AppTab`. */
-enum class MainTab(val title: String, val analyticsName: String) {
-    HOME("Home", "home"),
-    SETTINGS("Settings", "settings"),
+enum class MainTab(
+    val title: String,
+    val analyticsName: String,
+    val glyph: ImageVector,
+) {
+    HOME("Home", "home", HomeTabGlyph),
+    SETTINGS("Settings", "settings", SettingsTabGlyph),
 }

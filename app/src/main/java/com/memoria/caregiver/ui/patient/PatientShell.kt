@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -18,6 +20,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.dp
+import com.memoria.caregiver.ui.nav.DetectorsTabGlyph
+import com.memoria.caregiver.ui.nav.EventsTabGlyph
+import com.memoria.caregiver.ui.nav.LiveTabGlyph
+import com.memoria.caregiver.ui.nav.SensorsTabGlyph
+import com.memoria.caregiver.ui.nav.SettingsTabGlyph
+import com.memoria.caregiver.ui.theme.NemaraType
 import com.memoria.caregiver.analytics.LocalAnalytics
 import com.memoria.caregiver.data.model.Patient
 import com.memoria.caregiver.ui.events.EventsListScreen
@@ -112,8 +122,14 @@ fun PatientShell(
                             tab = entry
                             analytics.logScreen(entry.analyticsName)
                         },
-                        icon = { Text(entry.title) },
-                        label = null,
+                        icon = {
+                            Icon(
+                                imageVector = entry.glyph,
+                                contentDescription = null,
+                                modifier = Modifier.size(22.dp),
+                            )
+                        },
+                        label = { Text(entry.title, style = NemaraType.caption) },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = Ink,
                             unselectedIconColor = Ink3,
@@ -180,10 +196,14 @@ fun PatientShell(
  * "Sensors" rather than "Cameras" in the bar: the product calls the hardware a
  * sensor to the caregiver, and only the code calls it a camera.
  */
-enum class PatientTab(val title: String, val analyticsName: String) {
-    LIVE("Live", "patient.live"),
-    EVENTS("Events", "patient.events"),
-    CAMERAS("Sensors", "patient.sensors"),
-    DETECTORS("Detectors", "patient.detectors"),
-    SETTINGS("Settings", "patient.settings"),
+enum class PatientTab(
+    val title: String,
+    val analyticsName: String,
+    val glyph: ImageVector,
+) {
+    LIVE("Live", "patient.live", LiveTabGlyph),
+    EVENTS("Events", "patient.events", EventsTabGlyph),
+    CAMERAS("Sensors", "patient.sensors", SensorsTabGlyph),
+    DETECTORS("Detectors", "patient.detectors", DetectorsTabGlyph),
+    SETTINGS("Settings", "patient.settings", SettingsTabGlyph),
 }

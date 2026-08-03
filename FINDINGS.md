@@ -34,7 +34,16 @@ into a file — is the finding that matters most here.**
 ## OPEN
 
 ### F-13 — The main tab bar is text-only where iOS shows icon + label
-**Integration · Minor · known at the time of writing**
+**Integration · Minor · FIXED 2026-08-02**
+
+Both bars now render icon + label, as `Label(title, systemImage:)` does. Six SF
+Symbols drawn as vectors in `ui/nav/TabGlyphs.kt` — `house.fill`, `gearshape`,
+`video.fill`, `waveform.path`, `camera.fill` and
+`sensor.tag.radiowaves.forward.fill`. The last two are simplified to the part
+that reads at 24dp; the full symbols close up to noise at tab-bar size, which is
+noted at each one.
+
+**Original entry, for the record:**
 
 `MainShell`'s `NavigationBar` renders each tab's title as the *icon* slot with
 no label, so the bar reads as two text pills. iOS uses
