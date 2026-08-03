@@ -1,0 +1,161 @@
+package com.memoria.caregiver.ui.patient
+
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import com.memoria.caregiver.analytics.LocalAnalytics
+import com.memoria.caregiver.data.model.Patient
+import com.memoria.caregiver.ui.events.EventsListScreen
+import com.memoria.caregiver.ui.events.EventsListViewModel
+import com.memoria.caregiver.ui.theme.Ink
+import com.memoria.caregiver.ui.theme.Ink3
+import com.memoria.caregiver.ui.theme.Paper
+import com.memoria.caregiver.ui.theme.PaperDim
+
+/**
+ * The patient bundle: five tabs under a pinned [PatientHeader]. Port of
+ * `Features/Patient/PatientShell.swift`.
+ *
+ * ## The LiveKit teardown point, which is the thing to get right
+ *
+ * iOS disconnects the room from `.onDisappear` on the OUTER `TabView`, so it
+ * fires when the whole patient cover is dismissed and **not** when the
+ * caregiver moves between Live, Events and Sensors. That is what keeps the room
+ * alive across sub-tab switches. Compose gives no equivalent for free: a
+ * `DisposableEffect` inside a tab would tear the room down on every tab tap,
+ * and the caregiver would watch the video reconnect each time they checked the
+ * event list.
+ *
+ * So the teardown is a `DisposableEffect` keyed on the SHELL, not on the tab —
+ * see [onLeavePatient] below. Moving it inside the `when` is the single easiest
+ * way to break live video here.
+ *
+ * ## Why the header is outside the tab content
+ *
+ * iOS builds each tab as `VStack { PHeader; content }` so the header stays put
+ * while the content scrolls. Same here: the header is drawn once, above the
+ * `when`, rather than by each tab. A tab that forgot to draw it would otherwise
+ * lose the only indication of whose data is on screen.
+ */
+@Composable
+fun PatientShell(
+    patient: Patient,
+    resolvePhotoUrl: suspend (String) -> String?,
+    eventsViewModel: EventsListViewModel,
+    onHome: () -> Unit,
+    onFeedback: () -> Unit,
+    /**
+     * Disconnects the LiveKit room. Called exactly once, when the caregiver
+     * leaves the patient — never on a sub-tab switch.
+     */
+    onLeavePatient: () -> Unit,
+    modifier: Modifier = Modifier,
+    liveContent: @Composable () -> Unit,
+    camerasContent: @Composable () -> Unit,
+    detectorsContent: @Composable () -> Unit,
+    settingsContent: @Composable () -> Unit,
+) {
+    var tab by rememberSaveable { mutableStateOf(PatientTab.LIVE) }
+    val analytics = LocalAnalytics.current
+
+    // Keyed on Unit, so it survives every tab change and runs only when the
+    // whole shell leaves composition. See the class comment.
+    DisposableEffect(Unit) {
+        onDispose { onLeavePatient() }
+    }
+
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        containerColor = Paper,
+        bottomBar = {
+            NavigationBar(containerColor = Paper, contentColor = Ink) {
+                PatientTab.entries.forEach { entry ->
+                    NavigationBarItem(
+                        selected = tab == entry,
+                        onClick = {
+                            tab = entry
+                            analytics.logScreen(entry.analyticsName)
+                        },
+                        icon = { Text(entry.title) },
+                        label = null,
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = Ink,
+                            unselectedIconColor = Ink3,
+                            indicatorColor = PaperDim,
+                        ),
+                    )
+                }
+            }
+        },
+    ) { insets ->
+        Column(Modifier.padding(insets).fillMaxSize()) {
+            PatientHeader(
+                patient = patient,
+                resolvePhotoUrl = resolvePhotoUrl,
+                onHome = onHome,
+                // iOS hides the identity block on Settings, where the profile
+                // card immediately below already shows it.
+                showsIdentity = tab != PatientTab.SETTINGS,
+                onFeedback = onFeedback,
+            )
+
+            Box(Modifier.fillMaxSize()) {
+                when (tab) {
+                    PatientTab.LIVE -> liveContent()
+
+                    PatientTab.EVENTS -> {
+                        val state by eventsViewModel.state.collectAsState()
+
+                        // The 20-second quiet poll. Launched HERE rather than in
+                        // the ViewModel's init, so it runs only while the Events
+                        // tab is on screen — started in init it would poll from
+                        // behind the Live tab, which is the reliability net
+                        // firing where nobody can see it and the battery cost
+                        // landing where nobody asked for it.
+                        LaunchedEffect(Unit) { eventsViewModel.runFeedPoll() }
+
+                        EventsListScreen(
+                            state = state,
+                            onFilterChange = eventsViewModel::setFilter,
+                            onEventTap = eventsViewModel::onEventTap,
+                            onDismissReviewError = eventsViewModel::dismissReviewError,
+                        )
+                    }
+
+                    PatientTab.CAMERAS -> camerasContent()
+                    PatientTab.DETECTORS -> detectorsContent()
+                    PatientTab.SETTINGS -> settingsContent()
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The five patient tabs, in iOS's order.
+ *
+ * "Sensors" rather than "Cameras" in the bar: the product calls the hardware a
+ * sensor to the caregiver, and only the code calls it a camera.
+ */
+enum class PatientTab(val title: String, val analyticsName: String) {
+    LIVE("Live", "patient.live"),
+    EVENTS("Events", "patient.events"),
+    CAMERAS("Sensors", "patient.sensors"),
+    DETECTORS("Detectors", "patient.detectors"),
+    SETTINGS("Settings", "patient.settings"),
+}

@@ -29,7 +29,11 @@ import com.memoria.caregiver.ui.components.NemaraButtonVariant
 import com.memoria.caregiver.ui.components.NemaraEyebrow
 import com.memoria.caregiver.ui.home.RosterViewModel
 import com.memoria.caregiver.ui.nav.AuthNavHost
+import com.memoria.caregiver.ui.events.EventsListViewModel
 import com.memoria.caregiver.ui.nav.MainShell
+import com.memoria.caregiver.ui.patient.PatientShell
+import androidx.compose.runtime.LaunchedEffect
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.memoria.caregiver.ui.settings.AppSettingsViewModel
 import com.memoria.caregiver.ui.theme.Ink
 import com.memoria.caregiver.ui.theme.MemoriaTheme
@@ -107,8 +111,10 @@ class MainActivity : ComponentActivity() {
                                     // does this is an explicit placeholder
                                     // rather than a screen that half-works.
                                     patientContent = { patientId ->
-                                        PatientPlaceholder(
+                                        PatientRoute(
+                                            env = env,
                                             patientId = patientId,
+                                            resolvePhotoUrl = rosterViewModel::resolvePhotoUrl,
                                             onHome = { env.deepLink.closePatient() },
                                         )
                                     },
@@ -127,25 +133,81 @@ class MainActivity : ComponentActivity() {
 }
 
 /**
- * Stands in for the patient bundle until its five tabs are wired.
+ * Resolves a patient id to the row and hosts [PatientShell].
  *
- * Deliberately explicit about being unfinished. A blank screen here would be
- * indistinguishable from a patient whose data failed to load, which is exactly
- * the confusion FINDINGS.md F-10 is about.
+ * The lookup is against the observable cache rather than a fetch, so a Realtime
+ * update to the patient reaches the header without this screen doing anything.
+ * A null row means the id is not in the roster — a deep link to a patient the
+ * caregiver no longer has access to — and the honest response is to leave
+ * rather than to render a shell around nothing.
  */
 @androidx.compose.runtime.Composable
-private fun PatientPlaceholder(patientId: String, onHome: () -> Unit) {
+private fun PatientRoute(
+    env: AppEnvironment,
+    patientId: String,
+    resolvePhotoUrl: suspend (String) -> String?,
+    onHome: () -> Unit,
+) {
+    val patients by env.api.patientsFlow.collectAsState()
+    val patient = patients.firstOrNull { it.id == patientId }
+
+    if (patient == null) {
+        LaunchedEffect(patientId) { onHome() }
+        return
+    }
+
+    val eventsViewModel: EventsListViewModel = viewModel(
+        // Keyed on the patient, so switching patients does not carry the
+        // previous one's feed, open event or poll across.
+        key = "events:$patientId",
+        factory = viewModelFactory {
+            initializer { EventsListViewModel(env.api, patientId, env.deepLink) }
+        },
+    )
+
+    val openEvent by eventsViewModel.openEvent.collectAsState()
+
+    PatientShell(
+        patient = patient,
+        resolvePhotoUrl = resolvePhotoUrl,
+        eventsViewModel = eventsViewModel,
+        onHome = onHome,
+        // Feedback, the three remaining tabs and the event detail are the next
+        // slice. They are explicit stubs rather than half-built screens: a tab
+        // that renders something plausible but inert is the exact failure
+        // FINDINGS.md F-10 and H-12 are both about.
+        onFeedback = {},
+        // The single LiveKit teardown point, and it is deliberately empty
+        // rather than absent. LiveKitClient exists and is tested but is not
+        // in AppEnvironment yet, because nothing mints a token until the Live
+        // tab is built. The SEAM is what matters now: iOS disconnects when
+        // the patient cover is dismissed and never on a sub-tab switch, and
+        // PatientShell already keys its DisposableEffect that way. When the
+        // client lands, the disconnect goes here and nowhere else.
+        onLeavePatient = { /* TODO(live-tab): env.liveKit.disconnect() */ },
+        liveContent = { TabStub("Live") },
+        camerasContent = { TabStub("Sensors") },
+        detectorsContent = { TabStub("Detectors") },
+        settingsContent = { TabStub("Settings") },
+    )
+
+    // The detail sheet is not wired yet, so the open-event latch must still be
+    // released or the Events feed poll stays paused forever (the ViewModel
+    // pauses it while a detail is up).
+    if (openEvent != null) {
+        LaunchedEffect(openEvent) { eventsViewModel.closeEvent() }
+    }
+}
+
+/** An unbuilt tab, saying so. */
+@androidx.compose.runtime.Composable
+private fun TabStub(name: String) {
     Column(
         modifier = Modifier.fillMaxSize().padding(Spacing.xl),
         verticalArrangement = Arrangement.spacedBy(Spacing.md, Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        NemaraEyebrow("Patient")
-        Text(text = patientId, style = NemaraType.body, color = Ink)
-        NemaraButton(
-            title = "Home",
-            variant = NemaraButtonVariant.Secondary,
-            onClick = onHome,
-        )
+        NemaraEyebrow(name)
+        Text(text = "Not built yet", style = NemaraType.body, color = Ink)
     }
 }
