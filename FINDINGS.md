@@ -639,6 +639,42 @@ the normal case for a care team — that is the moment they hand the phone over.
 
 ---
 
+### F-34 — Parity deltas from comparing captured screens
+**Parity · Minor unless noted · OPEN**
+
+Running log of differences found by putting the two captures side by side. The
+harness (`scratchpad/ios-parity/run.sh`) has all nine iOS screens; Android
+equivalents are in `scratchpad/shots/`.
+
+**Roster — both fixed, see F-22:** the support button was missing entirely, and
+the selected tab was Ink instead of Terra with a Material pill iOS does not draw.
+
+**Detectors — content is byte-for-byte what iOS shows.** Same four detectors,
+same descriptions, same `All rooms · Always` chips, same `4 ACTIVE` count, the
+same wandering "Not active yet" notice and the same medication accuracy caveat.
+Three deltas:
+
+1. **The Detectors tab glyph is missing its emitter dot.** iOS's
+   `sensor.tag.radiowaves.forward.fill` is a filled dot with arcs radiating from
+   it; mine draws the arcs only, so it reads as a bracket rather than a sensor.
+   My own simplification, noted in `TabGlyphs.kt` as "the readable core" — seeing
+   it beside the original, the dot is the part that makes it legible.
+2. **The Events tab glyph is a single zigzag where iOS draws a multi-peak
+   waveform.** `waveform.path` on iOS has many short peaks; mine has one large
+   one, so at a glance it reads as a chart rather than audio.
+3. **The patient avatar shows its serif initial on Android and nothing on iOS.**
+   Worth checking rather than assuming: iOS may hide the letter once a
+   `photoStorageKey` exists, where Android keeps it visible under the image.
+   Android's own doc says the letter stays visible during `.empty` / `.failure`,
+   citing the Swift — so either the doc or the behaviour is wrong. **This is the
+   one on the list that could be a genuine logic difference rather than a
+   drawing one**, and it is not settled.
+
+Six screens are captured and not yet compared: welcome, login, app settings,
+patient live, patient events, patient sensors.
+
+---
+
 ### F-3 — Scene luma is measured on a different scale than iOS
 **Phase 6 · Important · CONFIRMED 2026-08-02 · needs a device to fix correctly**
 
