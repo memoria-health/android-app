@@ -145,9 +145,17 @@ tab bar to Home because `rememberSaveable` sat below the early return).
   **only** exit from the patient bundle, since the design has no back chevron.
   iOS's `Button { Image(...) }` gets UIKit's 44pt minimum for free.
 
-**Still open:** I-5b (the data-collection consent sheet composable itself),
-I-7 (the cache tests aim away from the class of effect D15 says the split
-endangers), and M-1..M-7.
+- **I-5b** — the consent sheet is ported and wired. See F-17 for what porting it
+  revealed about the consent design.
+- **I-7** — 14 tests now cover every "caller still owes" cache side effect:
+  both `loadCameras` refreshes (and that each still runs its `markEverOnline`
+  pass), `unpairCamera`'s owner-scan reload including that a FAILED reload does
+  not fail the unpair, the four row-swaps, and all three of the methods I-1
+  found had no owner. 15 mutations run, 15 caught, no survivors and no
+  collateral failures — so each assertion points at exactly what it claims. No
+  further defects found.
+
+**Still open:** M-1..M-7.
 
 ---
 

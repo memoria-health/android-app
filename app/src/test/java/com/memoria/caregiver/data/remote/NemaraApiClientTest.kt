@@ -4,11 +4,17 @@ package com.memoria.caregiver.data.remote
 
 import com.memoria.caregiver.data.model.Camera
 import com.memoria.caregiver.data.model.CreateDetectorRequest
+import com.memoria.caregiver.data.model.CreatePairingCodeResponse
+import com.memoria.caregiver.data.model.CreatePatientRequest
 import com.memoria.caregiver.data.model.DetectionEvent
 import com.memoria.caregiver.data.model.Detector
 import com.memoria.caregiver.data.model.EventListResponse
 import com.memoria.caregiver.data.model.Patient
+import com.memoria.caregiver.data.model.ProvisionSensorCameraResponse
 import com.memoria.caregiver.data.model.UpdateCameraRequest
+import com.memoria.caregiver.data.model.UpdateDetectorRequest
+import com.memoria.caregiver.data.model.UpdateEventRequest
+import com.memoria.caregiver.data.model.UpdatePatientRequest
 import com.memoria.caregiver.data.realtime.CameraLiveState
 import com.memoria.caregiver.data.realtime.EverOnlineStore
 import com.memoria.caregiver.data.realtime.Fx
@@ -758,4 +764,382 @@ class NemaraApiClientTest {
         assertTrue("expected the failure to propagate", thrown is ApiError)
         assertFalse("sign-in was left spinning after a failed bootstrap", client.isLoading.value)
     }
+
+    // ---- The side effects the six HTTP groups hand back to this client ----
+    //
+    // DIFFERENCES.md D15: the requests were grouped into six stateless classes
+    // and the cache stayed here, so every write below is a thing one file
+    // returns and a DIFFERENT file has to remember to store. Three of them had
+    // been forgotten outright before anyone looked. Each test names what the
+    // caregiver would see if the write went missing again.
+
+    // ---- Adding a camera refreshes the room grid ----
+
+    /**
+     * Minting a pairing code inserts a placeholder camera row server-side. The
+     * refresh is the only thing that puts it on screen: without it the
+     * caregiver types the code into the wall phone while the Live tab still
+     * shows the rooms they had before, with no sign the new one exists.
+     */
+    @Test fun `createPairingCode refreshes the patient's cameras so the new room appears`() =
+        runTest {
+            val client = makeClient()
+            client.camerasByPatient = mapOf(p1 to listOf(Fx.camera("c1", patientId = p1)))
+            // The placeholder the pairing code just created, as the server now
+            // reports it: present, unpaired, waiting for the phone.
+            serveCameras(
+                p1,
+                Fx.camera("c1", patientId = p1),
+                Fx.camera("c-new", patientId = p1, paired = false, online = false),
+            )
+            responses["POST /v1/patients/$p1/cameras/pairing-code"] = encode(
+                CreatePairingCodeResponse.serializer(),
+                CreatePairingCodeResponse(
+                    pairingCode = "123456",
+                    expiresAt = Fx.T,
+                    cameraId = "c-new",
+                ),
+            )
+
+            client.createPairingCode(p1, room = "Kitchen")
+
+            assertEquals(listOf("c1", "c-new"), client.camerasByPatient[p1]?.map { it.id })
+        }
+
+    /**
+     * The refresh has to go through the caching load, not a bare fetch. The
+     * ever-online mark is the difference, and it is the mark that stops an
+     * established camera reading as "Sensor is preparing to start…" the next
+     * time it is offline — a wrong story about a home that is working fine.
+     */
+    @Test fun `createPairingCode's refresh still marks the online cameras as ever-online`() =
+        runTest {
+            val store = RecordingEverOnlineStore()
+            val client = makeClient(CameraLiveState(store))
+            serveCameras(p1, Fx.camera("cam-up", patientId = p1, online = true))
+            responses["POST /v1/patients/$p1/cameras/pairing-code"] = encode(
+                CreatePairingCodeResponse.serializer(),
+                CreatePairingCodeResponse(
+                    pairingCode = "123456",
+                    expiresAt = Fx.T,
+                    cameraId = "cam-up",
+                ),
+            )
+
+            client.createPairingCode(p1, room = "Kitchen")
+
+            assertEquals(setOf("cam-up"), store.load())
+        }
+
+    /**
+     * Claiming a discovered sensor is the same story as a pairing code: the row
+     * is created server-side and only the refresh puts the room on screen.
+     * Worse here, because the sensor tab has already removed the device from
+     * the discovered list, so a missing refresh leaves the camera nowhere at
+     * all until the app is relaunched.
+     */
+    @Test fun `provisionSensorCamera refreshes the patient's cameras so the new sensor appears`() =
+        runTest {
+            val client = makeClient()
+            client.camerasByPatient = mapOf(p1 to listOf(Fx.camera("c1", patientId = p1)))
+            serveCameras(
+                p1,
+                Fx.camera("c1", patientId = p1),
+                Fx.camera("cam-sensor", patientId = p1),
+            )
+            responses["POST /v1/patients/$p1/cameras/pi-provision"] = encode(
+                ProvisionSensorCameraResponse.serializer(),
+                ProvisionSensorCameraResponse(
+                    cameraId = "cam-sensor",
+                    patientId = p1,
+                    livekitIdentity = "cam_abcd1234",
+                    livekitRoom = "patient_$p1",
+                ),
+            )
+
+            client.provisionSensorCamera(p1, room = "Kitchen", discoveryId = "disc-1")
+
+            assertEquals(listOf("c1", "cam-sensor"), client.camerasByPatient[p1]?.map { it.id })
+        }
+
+    /** Same reason as the pairing-code refresh: a bare fetch would lose the mark. */
+    @Test fun `provisionSensorCamera's refresh still marks the online cameras as ever-online`() =
+        runTest {
+            val store = RecordingEverOnlineStore()
+            val client = makeClient(CameraLiveState(store))
+            serveCameras(p1, Fx.camera("cam-sensor", patientId = p1, online = true))
+            responses["POST /v1/patients/$p1/cameras/pi-provision"] = encode(
+                ProvisionSensorCameraResponse.serializer(),
+                ProvisionSensorCameraResponse(
+                    cameraId = "cam-sensor",
+                    patientId = p1,
+                    livekitIdentity = "cam_abcd1234",
+                    livekitRoom = "patient_$p1",
+                ),
+            )
+
+            client.provisionSensorCamera(p1, room = "Kitchen", discoveryId = "disc-1")
+
+            assertEquals(setOf("cam-sensor"), store.load())
+        }
+
+    // ---- Unpairing reloads the household that owned the camera ----
+
+    /**
+     * Unpair keeps the row and only clears its pairing, so nothing is removed
+     * locally — the reload is the whole update. Without it the detail screen
+     * still reads `paired == true` and hides the "Show pairing code" button,
+     * which is the only way back: the caregiver has unpaired a camera and has
+     * no way to pair it again.
+     *
+     * The owning patient is found by scanning the cache, because the caller
+     * only has a camera id. The camera is planted under the SECOND patient so
+     * that reloading whichever household happens to be first would fail here.
+     */
+    @Test fun `unpairCamera reloads the cameras of the patient that owned it`() = runTest {
+        val client = makeClient()
+        client.camerasByPatient = mapOf(
+            p1 to listOf(Fx.camera("c1", patientId = p1)),
+            p2 to listOf(Fx.camera("c2", patientId = p2, paired = true)),
+        )
+        serveCameras(p2, Fx.camera("c2", patientId = p2, paired = false))
+
+        client.unpairCamera("c2")
+
+        assertEquals(false, client.camerasByPatient[p2]?.single()?.paired)
+        assertTrue(
+            "the wrong household's cameras were reloaded: $seen",
+            seen.none { it == "GET /v1/patients/$p1/cameras" },
+        )
+    }
+
+    /**
+     * The unpair itself already succeeded server-side, so a reload that fails
+     * on a flaky network must not surface as "unpairing failed" — the
+     * caregiver would retry an action that has already happened, and the
+     * second attempt 409s. The stale row corrects itself on the next poll.
+     */
+    @Test fun `unpairCamera survives a failed reload`() = runTest {
+        val client = makeClient()
+        client.camerasByPatient = mapOf(p1 to listOf(Fx.camera("c1", patientId = p1)))
+        statuses["GET /v1/patients/$p1/cameras"] = HttpStatusCode.InternalServerError
+
+        val thrown = runCatching { client.unpairCamera("c1") }.exceptionOrNull()
+
+        assertNull("a failed refresh must not fail the unpair", thrown)
+        assertTrue(
+            "the reload was never attempted: $seen",
+            seen.contains("GET /v1/patients/$p1/cameras"),
+        )
+    }
+
+    // ---- Roster writes ----
+
+    /**
+     * The new patient has to land in the roster the moment they are created,
+     * because the app navigates straight into their setup flow. A roster that
+     * does not have them means backing out lands on a home screen that does
+     * not list the household just added.
+     *
+     * Appended, not prepended: the roster is in server order and a new patient
+     * is the newest, so putting them first would disagree with the order every
+     * later load produces.
+     */
+    @Test fun `createPatient appends the new patient to the roster`() = runTest {
+        val client = makeClient()
+        client.patients = listOf(Fx.patient(p1, preferredName = "Ann"))
+        responses["POST /v1/patients"] =
+            encode(Patient.serializer(), Fx.patient(p2, preferredName = "Zoe"))
+
+        client.createPatient(
+            CreatePatientRequest(
+                fullName = "Zoe Example",
+                preferredName = "Zoe",
+                relation = Patient.Relation.PARENT,
+                country = "US",
+            ),
+        )
+
+        assertEquals(listOf("Ann", "Zoe"), client.patients.map { it.preferredName })
+    }
+
+    /**
+     * Renaming one patient must leave the rest of the roster where it was. A
+     * swap that replaced the list, or that wrote at the wrong index, would show
+     * one household's name on another household's card — the mistake a
+     * caregiver acts on before they notice it.
+     */
+    @Test fun `updatePatient swaps the row in place and leaves the others alone`() = runTest {
+        val client = makeClient()
+        client.patients = listOf(
+            Fx.patient(p1, preferredName = "Ann"),
+            Fx.patient(p2, preferredName = "Zoe"),
+        )
+        responses["PATCH /v1/patients/$p1"] =
+            encode(Patient.serializer(), Fx.patient(p1, preferredName = "Annie"))
+
+        client.updatePatient(p1, UpdatePatientRequest(preferredName = "Annie"))
+
+        assertEquals(listOf("Annie", "Zoe"), client.patients.map { it.preferredName })
+    }
+
+    // ---- Detector and event writes land under the row's own patient ----
+
+    /**
+     * Toggling a detector off has to be visible immediately, and under the
+     * household it belongs to. The patient key comes from the server's row,
+     * not from whatever list happens to be first: writing into the wrong
+     * household would tell one caregiver a detector is off while it is still
+     * running for the home they actually changed.
+     */
+    @Test fun `updateDetector swaps the row in place under its own patient`() = runTest {
+        val client = makeClient()
+        client.detectorsByPatient = mapOf(
+            p1 to listOf(Fx.detector("d1", patientId = p1)),
+            p2 to listOf(
+                Fx.detector("d2", patientId = p2, isOn = true),
+                Fx.detector("d3", patientId = p2, isOn = true),
+            ),
+        )
+        responses["PATCH /v1/detectors/d2"] =
+            encode(Detector.serializer(), Fx.detector("d2", patientId = p2, isOn = false))
+
+        client.updateDetector("d2", UpdateDetectorRequest(isOn = false))
+
+        assertEquals(listOf(false, true), client.detectorsByPatient[p2]?.map { it.isOn })
+        assertEquals(listOf(true), client.detectorsByPatient[p1]?.map { it.isOn })
+    }
+
+    /**
+     * Opening an alert marks it read. If the write misses, the feed keeps the
+     * event bold and the unread count keeps counting it, so the caregiver
+     * cannot tell which alerts they have already dealt with.
+     */
+    @Test fun `updateEvent swaps the row in place under its own patient`() = runTest {
+        val client = makeClient()
+        client.eventsByPatient = mapOf(
+            p1 to listOf(Fx.event("e1", patientId = p1)),
+            p2 to listOf(Fx.event("e2", patientId = p2), Fx.event("e3", patientId = p2)),
+        )
+        responses["PATCH /v1/events/e2"] =
+            encode(DetectionEvent.serializer(), Fx.event("e2", patientId = p2).copy(opened = true))
+
+        client.updateEvent("e2", UpdateEventRequest(opened = true))
+
+        assertEquals(listOf(true, false), client.eventsByPatient[p2]?.map { it.opened })
+        assertEquals(listOf(false), client.eventsByPatient[p1]?.map { it.opened })
+    }
+
+    // ---- refineDetector: commit writes, preview must not ----
+
+    /**
+     * A committed refine rewrites what the detector watches for. The detector
+     * list has to show the new wording, or the caregiver reads back the rule
+     * they replaced and believes their change did not take.
+     */
+    @Test fun `refineDetector commits the rewritten detector to the cache`() = runTest {
+        val client = makeClient()
+        client.detectorsByPatient = mapOf(
+            p1 to listOf(Fx.detector("d1", patientId = p1).copy(description = "Someone falls")),
+        )
+        responses["POST /v1/detectors/d1/refine"] = encode(
+            Detector.serializer(),
+            Fx.detector("d1", patientId = p1).copy(description = "Someone falls, not sitting down"),
+        )
+
+        client.refineDetector("d1", feedback = "sitting down is not a fall")
+
+        assertEquals(
+            listOf("Someone falls, not sitting down"),
+            client.detectorsByPatient[p1]?.map { it.description },
+        )
+    }
+
+    /**
+     * A preview is a dry run — the backend compiles the change and persists
+     * nothing. Writing the response into the cache would show the caregiver a
+     * detector that reads as saved when the server still holds the old rule,
+     * so backing out of the sheet without saving would leave the app confidently
+     * describing a rule that is not running in the home.
+     */
+    @Test fun `refineDetector preview leaves the cached detector alone`() = runTest {
+        val client = makeClient()
+        client.detectorsByPatient = mapOf(
+            p1 to listOf(Fx.detector("d1", patientId = p1).copy(description = "Someone falls")),
+        )
+        responses["POST /v1/detectors/d1/refine"] = encode(
+            Detector.serializer(),
+            Fx.detector("d1", patientId = p1).copy(description = "Someone falls, not sitting down"),
+        )
+
+        val previewed = client.refineDetector(
+            "d1",
+            feedback = "sitting down is not a fall",
+            preview = true,
+        )
+
+        assertEquals(
+            "an unsaved preview was written into the cache",
+            listOf("Someone falls"),
+            client.detectorsByPatient[p1]?.map { it.description },
+        )
+        // Still returned in full — the sheet renders the previewed wording.
+        assertEquals("Someone falls, not sitting down", previewed.description)
+    }
+
+    // ---- Patient photo ----
+
+    /**
+     * Every avatar on screen reads from the cached row, so the upload has to
+     * swap it in. Without it the caregiver picks a photo, the sheet closes, and
+     * the roster still shows the initials placeholder as though nothing
+     * happened.
+     */
+    @Test fun `uploadPatientPhoto swaps the returned row into the roster`() = runTest {
+        val client = makeClient()
+        client.patients = listOf(
+            Fx.patient(p1),
+            Fx.patient(p2).copy(photoStorageKey = "photos/$p2.jpg"),
+        )
+        responses["POST /v1/patients/$p1/photo"] = encode(
+            Patient.serializer(),
+            Fx.patient(p1).copy(photoStorageKey = "photos/$p1.jpg"),
+        )
+
+        client.uploadPatientPhoto(p1, bytes = byteArrayOf(1, 2, 3), contentType = "image/jpeg")
+
+        assertEquals(
+            listOf("photos/$p1.jpg", "photos/$p2.jpg"),
+            client.patients.map { it.photoStorageKey },
+        )
+    }
+
+    /**
+     * Deleting the avatar has no response body to swap in, so the cached row is
+     * edited rather than replaced. Leaving the key behind keeps every avatar
+     * rendering from a storage object that no longer resolves — a broken image
+     * on the roster the caregiver cannot clear.
+     *
+     * The name is asserted alongside it because the edit must not cost the rest
+     * of the row: replacing it with a freshly minted patient would blank the
+     * fields the server never sent back.
+     */
+    @Test fun `deletePatientPhoto clears the photo key in place and keeps the rest of the row`() =
+        runTest {
+            val client = makeClient()
+            client.patients = listOf(
+                Fx.patient(p1, preferredName = "Ann").copy(photoStorageKey = "photos/$p1.jpg"),
+                Fx.patient(p2).copy(photoStorageKey = "photos/$p2.jpg"),
+            )
+
+            client.deletePatientPhoto(p1)
+
+            assertNull(client.patients.first { it.id == p1 }.photoStorageKey)
+            assertEquals("Ann", client.patients.first { it.id == p1 }.preferredName)
+            assertEquals(
+                "another patient's avatar was cleared too",
+                "photos/$p2.jpg",
+                client.patients.first { it.id == p2 }.photoStorageKey,
+            )
+        }
 }
