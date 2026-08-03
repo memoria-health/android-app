@@ -605,6 +605,40 @@ is unbuilt.** The other eleven render as ordinary controls that do nothing.
 
 ---
 
+### F-33 — The app crashed on EVERY sign-out
+**Integration · Critical · FIXED 2026-08-03, reproduced and re-verified on device**
+
+```
+FATAL EXCEPTION: DefaultDispatcher-worker-1
+java.lang.IllegalStateException: Websocket not yet initialized
+    at io.github.jan.supabase.realtime.RealtimeImpl.getWebsocket(RealtimeImpl.kt:58)
+    at io.github.jan.supabase.realtime.RealtimeChannelImpl.updateAuth(RealtimeChannelImpl.kt:191)
+    at io.github.jan.supabase.realtime.RealtimeImpl$setAuth$3.invokeSuspend(RealtimeImpl.kt:251)
+```
+
+supabase-kt forwards every auth change to Realtime. Its `setAuth` iterates the
+open channels calling `updateAuth`, which calls `getWebsocket()` — and by
+sign-out time the socket is gone, so it throws **inside the SDK's own
+`StandaloneCoroutine` on `Dispatchers.IO`**, where nothing of ours can catch it.
+Process death.
+
+`api.teardown()` ran in `onSignedOut`, i.e. **after** the Supabase sign-out that
+triggers the event. Moving it to `onWillSignOut` closes the channels first, so
+`setAuth` has nothing to iterate. The cache clear moving earlier is strictly
+better anyway: it is a privacy boundary, and a care team sharing one device is
+the normal case.
+
+**Only a device could find this.** The throw is in a third-party coroutine, and
+no unit test constructs a live Realtime client — 1843 tests were green with the
+app crashing on every sign-out. It is also the exact signature I saw earlier in
+a dirty logcat and declined to attribute without evidence; the evidence came
+from walking the path deliberately.
+
+**What a caregiver saw:** tap Sign out, the app disappears. On a shared device —
+the normal case for a care team — that is the moment they hand the phone over.
+
+---
+
 ### F-3 — Scene luma is measured on a different scale than iOS
 **Phase 6 · Important · CONFIRMED 2026-08-02 · needs a device to fix correctly**
 

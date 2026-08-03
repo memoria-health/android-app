@@ -169,6 +169,21 @@ class AppEnvironment(
         }
 
         auth.onWillSignOut = {
+            // BEFORE the Supabase sign-out, and the ordering is the whole point.
+            //
+            // supabase-kt forwards every auth change to Realtime, and its
+            // `setAuth` iterates the open channels calling `updateAuth`, which
+            // calls `getWebsocket()`. By sign-out time the socket is gone, so it
+            // throws `IllegalStateException: Websocket not yet initialized`
+            // inside the SDK's own coroutine on Dispatchers.IO — where nothing
+            // of ours can catch it. **That crashed the app on every sign-out.**
+            // Closing the channels first leaves `setAuth` nothing to iterate.
+            //
+            // Only a device found this: the crash is in a third-party coroutine
+            // and no unit test constructs a live Realtime client.
+            // FINDINGS.md F-33.
+            api.teardown()
+
             // TODO(REQ-8, phase-7): de-register this device's push token while
             // the session is still valid, so a signed-out caregiver stops
             // receiving pushes on a device they left. Best-effort by design —
@@ -176,12 +191,11 @@ class AppEnvironment(
         }
 
         auth.onSignedOut = {
-            // Stops the poll, closes the channels and empties all four cached
-            // collections. The clear is a privacy boundary, not housekeeping:
-            // a care team sharing one device is the normal case, and without it
-            // the next person to sign in is one recomposition away from seeing
-            // a household they have no relationship to.
-            api.teardown()
+            // The cache clear already happened in onWillSignOut, above — it is a
+            // privacy boundary and running it earlier is strictly better: a care
+            // team sharing one device is the normal case, and the next person to
+            // sign in must not be one recomposition away from a household they
+            // have no relationship to.
             deepLink.closePatient()
         }
 
