@@ -3,6 +3,7 @@ package com.memoria.caregiver.ui.permissions
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
@@ -41,6 +42,16 @@ enum class AppPermission(val manifestName: String) {
 
     /** Face enrollment and the profile photo. iOS: NSCameraUsageDescription. */
     Camera(Manifest.permission.CAMERA),
+
+    /**
+     * Showing an alert at all. iOS asks for the equivalent through
+     * `UNUserNotificationCenter.requestAuthorization` at launch.
+     *
+     * Unlike the other two, this one did not exist before Android 13. Callers
+     * should use [rememberNotificationPermission] rather than naming it
+     * directly — see the comment there.
+     */
+    Notifications(Manifest.permission.POST_NOTIFICATIONS),
 }
 
 /** Whether the permission is already granted, without prompting. */
@@ -97,4 +108,37 @@ fun rememberPermissionState(permission: AppPermission): PermissionState {
         denied = denied,
         request = { if (!granted) launcher.launch(permission.manifestName) },
     )
+}
+
+/**
+ * The notification gate, which needs a version check the other two do not.
+ *
+ * `POST_NOTIFICATIONS` was introduced in Android 13 (API 33). This app's minSdk
+ * is 26, so on roughly the older half of the phones it runs on the permission
+ * does not exist: notifications are granted at install and the caregiver turns
+ * them off in Settings if they want to.
+ *
+ * So below 33 this reports granted and asks for nothing, which is the truth.
+ *
+ * Being honest about how much this branch earns: most platform builds already
+ * answer `checkSelfPermission` with "granted" below 33, so on those the branch
+ * changes nothing, and a mutation that deletes it does not fail any test here.
+ * It is kept because the failure it guards against is not a wrong boolean, it is
+ * `launcher.launch()` being called with a permission name the platform has never
+ * defined — on any build that answers the check the other way, which is exactly
+ * the kind of variation no emulator and no unit test can show us.
+ *
+ * [rememberPermissionState] is called on every version rather than only above
+ * 33, because a `remember` that appears and disappears between compositions is
+ * how launchers get unregistered underneath an in-flight result. The version is
+ * constant for the life of the process, so only the returned value branches.
+ */
+@Composable
+fun rememberNotificationPermission(): PermissionState {
+    val state = rememberPermissionState(AppPermission.Notifications)
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        state
+    } else {
+        PermissionState(granted = true, denied = false, request = {})
+    }
 }

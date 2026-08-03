@@ -1,4 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Memoria</string>
+
+    <!--
+      Push notifications.
+
+      The channel id is a resource because two places have to name the same
+      channel: this app, when it creates it and posts to it, and the manifest,
+      which tells Firebase where to put a notification the system draws without
+      running any of our code. Written twice by hand they would drift, and the
+      symptom would be alerts quietly appearing under "Miscellaneous", where the
+      caregiver's own mute setting does not apply.
+
+      The name and description are read by a person in Settings > Notifications,
+      at the moment they are deciding whether to turn alerts off. They name no
+      patient: a channel list is visible to anyone who picks up the phone.
+    -->
+    <string name="push_channel_alerts_id" translatable="false">alerts</string>
+    <string name="push_channel_alerts_name">Alerts</string>
+    <string name="push_channel_alerts_description">When a camera at home notices something you asked it to watch for, like a fall or getting up in the night. Turning this off stops every alert on this phone. Email alerts are set up separately, for each person.</string>
+
+    <!--
+      Shown only when a notification arrives carrying no text of its own. It says
+      that something happened and nothing about what or about whom, because this
+      app must not invent notification copy out of the patient data it holds.
+    -->
+    <string name="push_fallback_title">Memoria alert</string>
+    <string name="push_fallback_body">Something needs your attention. Open Memoria to see it.</string>
 </resources>

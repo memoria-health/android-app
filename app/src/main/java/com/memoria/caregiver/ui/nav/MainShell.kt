@@ -73,6 +73,15 @@ fun MainShell(
     onEditProfile: () -> Unit,
     onPrivacy: () -> Unit,
     onContactSupport: () -> Unit,
+    /**
+     * Fires the Android notification-permission dialog. Supplied by
+     * `MainActivity`, which owns the launcher; see below for why this is the
+     * place it is called from.
+     *
+     * Defaulted to nothing for tests and previews, which have no Activity to
+     * host a system dialog. Every production call site passes the real one.
+     */
+    onAskForNotifications: () -> Unit = {},
     modifier: Modifier = Modifier,
     /**
      * iOS applies `.supportButtonOverlay()` on RootView AND again on
@@ -83,6 +92,53 @@ fun MainShell(
     showSupportButton: Boolean = true,
 ) {
     val link by deepLink.state.collectAsState()
+
+    // Both of these are ABOVE the early return that opens a patient, for the
+    // same reason `tab` is: below it, opening a patient takes them out of
+    // composition and closing the patient runs them a second time.
+    //
+    // 1. The pending notification tap. `MainTabView.onAppear` does exactly this
+    //    on iOS, and this surface had no counterpart at all.
+    //
+    //    Being precise about what it does today, because a call that looks
+    //    load-bearing and is not is its own kind of trap: `bufferEventTap`
+    //    records a tap and drains it in the same breath, so by the time this
+    //    surface appears the buffer is normally already empty and the caregiver
+    //    reaches the event through the router's durable target instead. What
+    //    this call adds is the other half of the router's contract — record,
+    //    then spend — so that if recording ever stops routing immediately (the
+    //    obvious future change: hold the tap until somebody is signed in), the
+    //    surface that can act on it already asks for it. Take-and-clear, so it
+    //    can never route the same tap twice.
+    // 2. The notification permission.
+    //
+    // **Why the permission is asked HERE, and not at launch as iOS does.**
+    // iOS asks on the first frame of the app because its prompt costs nothing to
+    // ask badly — a refusal can be reversed by asking again later. Android's
+    // cannot: after the second refusal the system stops showing the dialog for
+    // good, and the only way back is a trip into Settings that nobody makes. So
+    // there are exactly two chances, and where they are spent matters.
+    //
+    // This composable IS the signed-in surface — it exists only inside
+    // `AuthNavHost`'s signedInContent — so reaching it means the caregiver has
+    // just signed in or has just come back to an account they already have.
+    // That is the first moment the app has anything to alert them about, and the
+    // request follows a deliberate action (signing in) rather than ambushing
+    // someone on a screen they merely landed on, which is the rule DIFFERENCES.md
+    // D13 sets for the camera and microphone.
+    //
+    // Asking on the welcome or sign-up screen — the literal reading of "iOS asks
+    // at launch" — would burn one of the two chances on somebody who has not yet
+    // seen a patient, let alone an alert.
+    //
+    // There is deliberately no "have we asked before" flag stored anywhere. The
+    // system already enforces the two-strike rule, and `request()` returns
+    // immediately when the permission is held, so a stored flag would only make
+    // Android stricter than iOS while adding a file to keep in step.
+    LaunchedEffect(Unit) {
+        deepLink.drainPendingTap()
+        onAskForNotifications()
+    }
 
     // Declared ABOVE the early return on purpose. Below it, opening a patient
     // takes the whole Scaffold out of composition, `rememberSaveable`

@@ -45,3 +45,11 @@ keystore.properties
 *.env
 !.env.template
 !.env.example
+
+# Cloud-sync conflict copies. OneDrive/iCloud drop "Foo 2.kt" beside "Foo.kt"
+# inside the source set, which breaks compileDebugKotlin with redeclaration
+# errors that look like a real bug. Happened 2026-08-03 with
+# `analytics/BufferedAnalytics 2.kt`. Ignoring them keeps them out of a commit;
+# they still have to be moved out of the tree to build.
+*[0-9].kt
+*[0-9].kts

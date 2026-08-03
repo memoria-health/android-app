@@ -61,7 +61,12 @@ import com.memoria.caregiver.ui.detectors.DetectorLibraryMode
 import com.memoria.caregiver.ui.onboarding.FaceEnrollmentHost
 import com.memoria.caregiver.ui.onboarding.NewPatientHost
 import com.memoria.caregiver.ui.onboarding.rememberEnrollmentPermission
+import com.memoria.caregiver.push.EventTap
+import com.memoria.caregiver.push.PUSH_KEY_EVENT_ID
+import com.memoria.caregiver.push.PUSH_KEY_PATIENT_ID
+import com.memoria.caregiver.push.eventPushFrom
 import com.memoria.caregiver.ui.permissions.PermissionState
+import com.memoria.caregiver.ui.permissions.rememberNotificationPermission
 import com.memoria.caregiver.ui.settings.EditProfileHost
 import com.memoria.caregiver.ui.settings.rememberPatientPhotoUpload
 import com.memoria.caregiver.ui.support.FeedbackHost
@@ -136,6 +141,12 @@ class MainActivity : ComponentActivity() {
         // already has the code, so handing it over again would spend a
         // single-use code twice and turn a working screen into "link expired".
         if (savedInstanceState == null) consumeRecoveryLink(intent)
+        // Cold start from a notification tap: the app was not running and this
+        // launch IS the tap. Same first-create guard as the recovery link, for a
+        // slightly different reason — the router's target is durable, so
+        // re-spending the intent after a configuration change would drag the
+        // caregiver back to the event they had already navigated away from.
+        if (savedInstanceState == null) consumeEventTap(intent)
         val rosterViewModel = ViewModelProvider(
             owner,
             viewModelFactory { initializer { RosterViewModel(env.api, env.auth) } },
@@ -151,6 +162,12 @@ class MainActivity : ComponentActivity() {
             // called from the taps that mean "start enrollment" — the identity
             // card's Enroll row. See RuntimePermission.kt and DIFFERENCES.md D13.
             val cameraPermission = rememberEnrollmentPermission()
+            // Composed at the root, next to the camera gate and for the same
+            // reason: the launcher must be registered before anything asks, and
+            // registering it inside a screen means an in-flight result can be
+            // lost when that screen leaves the composition. WHERE it is fired
+            // from is a separate decision and lives in MainShell.
+            val notificationPermission = rememberNotificationPermission()
             CompositionLocalProvider(
                 // The real sink, from the Application-scoped environment, so the
                 // buffer and its flush worker outlive this Activity — a
@@ -222,6 +239,7 @@ class MainActivity : ComponentActivity() {
                                     onEditProfile = { showEditProfile = true },
                                     onPrivacy = { showPrivacy = true },
                                     onContactSupport = { showSupport = true },
+                                    onAskForNotifications = notificationPermission.request,
                                 )
                                 if (showAddPatient) ModalOverlay(screen = "new_patient") {
                                     NewPatientHost(
@@ -319,6 +337,29 @@ class MainActivity : ComponentActivity() {
         // configuration change — would be reading a stale one.
         setIntent(intent)
         consumeRecoveryLink(intent)
+        consumeEventTap(intent)
+    }
+
+    /**
+     * Hand a notification tap to the router, which is what opens the patient and
+     * focuses the event.
+     *
+     * The ids are stripped out of the intent as they are read, for the same
+     * reason the recovery code is: the system keeps an Activity's intent, prints
+     * it in bug reports and in `dumpsys activity`, and hands it back to a
+     * re-created Activity. These two ids name a household and an incident in it.
+     */
+    private fun consumeEventTap(intent: Intent?) {
+        val tap = eventTapFrom(intent) ?: return
+        intent?.removeExtra(PUSH_KEY_EVENT_ID)
+        intent?.removeExtra(PUSH_KEY_PATIENT_ID)
+        // Read from the Application rather than a field: onNewIntent can run
+        // before onCreate's local is in scope, and the environment is
+        // process-scoped anyway.
+        (application as MemoriaApplication).environment.deepLink.bufferEventTap(
+            eventId = tap.eventId,
+            patientId = tap.patientId,
+        )
     }
 
     /**
@@ -334,6 +375,30 @@ class MainActivity : ComponentActivity() {
         intent?.data = null
         authViewModel.onRecoveryLink(code)
     }
+}
+
+/**
+ * The event a notification tap is aimed at, or null for every other intent.
+ *
+ * The other half of the contract `EventNotifications.tapIntent` writes, kept as
+ * a pure function of the intent for the same two reasons `recoveryCodeFrom`
+ * below is: it can be tested without an Activity, and the one place that decides
+ * "this is a notification tap" is readable in full.
+ *
+ * The ids are re-validated here rather than trusted. They came back through the
+ * system, and any app can start an exported Activity with any extras it likes —
+ * this one is exported, because the recovery link requires it. A malformed id
+ * would otherwise be routed as a real target and land the caregiver on an empty
+ * screen.
+ */
+internal fun eventTapFrom(intent: Intent?): EventTap? {
+    val extras = intent?.extras ?: return null
+    return eventPushFrom(
+        mapOf(
+            PUSH_KEY_EVENT_ID to (extras.getString(PUSH_KEY_EVENT_ID) ?: return null),
+            PUSH_KEY_PATIENT_ID to (extras.getString(PUSH_KEY_PATIENT_ID) ?: return null),
+        ),
+    )?.tap
 }
 
 /**

@@ -2,6 +2,7 @@ package com.memoria.caregiver
 
 import android.content.Context
 import android.os.Build
+import android.util.Log
 import com.memoria.caregiver.analytics.Analytics
 import com.memoria.caregiver.analytics.BufferedAnalytics
 import com.memoria.caregiver.analytics.DeviceContext
@@ -14,10 +15,16 @@ import com.memoria.caregiver.data.remote.ApiError
 import com.memoria.caregiver.data.remote.HttpTransport
 import com.memoria.caregiver.data.remote.NemaraApiClient
 import com.memoria.caregiver.data.remote.NemaraJson
+import com.memoria.caregiver.data.model.ApnsEnvironment
 import com.memoria.caregiver.data.realtime.CameraLiveState
 import com.memoria.caregiver.data.realtime.InMemoryEverOnlineStore
 import com.memoria.caregiver.data.realtime.RealtimeStore
 import com.memoria.caregiver.data.realtime.SharedPrefsEverOnlineStore
+import com.memoria.caregiver.push.InMemoryPushTokenStore
+import com.memoria.caregiver.push.PUSH_LOG_TAG
+import com.memoria.caregiver.push.PushTokenRegistrar
+import com.memoria.caregiver.push.SharedPrefsPushTokenStore
+import com.memoria.caregiver.push.pushTokenPrefs
 import com.memoria.caregiver.ui.live.PeopleBlurStore
 import com.memoria.caregiver.ui.nav.DeepLinkRouter
 import io.github.jan.supabase.auth.Auth
@@ -168,6 +175,63 @@ class AppEnvironment(
     val deepLink = DeepLinkRouter()
 
     /**
+     * The push token, and the two moments the backend needs to hear about it.
+     *
+     * iOS splits this across `AppDelegate` (which caches the token) and
+     * `NemaraCaregiverApp.init` (which registers it); both halves are here
+     * because Android has no app delegate to hang the cache on.
+     *
+     * **The registration call is deliberately switched off** — see
+     * `backendAcceptsFcmTokens` below and the class's own documentation. The
+     * wiring around it is complete and live.
+     */
+    val pushTokens = PushTokenRegistrar(
+        scope = scope,
+        store = appContext
+            ?.let { SharedPrefsPushTokenStore(pushTokenPrefs(it)) }
+            ?: InMemoryPushTokenStore(),
+        // TODO(REQ-8, QUESTIONS.md Q1): flip to true the day POST /v1/me/devices
+        // accepts an FCM registration token, and fix the two bodies below to
+        // match whatever shape it accepts. Those are the whole change.
+        //
+        // Today it cannot be true. The endpoint takes `apns_token` plus an
+        // `environment` of exactly "sandbox" or "production", enforced by a check
+        // constraint on the column, and `src/services/push.py` reads every stored
+        // row as an APNs token and POSTs it to Apple. An FCM token registered
+        // through that route is not merely ignored — Apple rejects it, and a 410
+        // makes the backend delete the row. So guessing here produces a device
+        // that registers itself and is silently unregistered again.
+        backendAcceptsFcmTokens = false,
+        register = { token ->
+            api.enrollment.registerDeviceToken(
+                // TODO(REQ-8): an FCM registration token in a field named for
+                // APNs. The field name is the contract question, not a mistake
+                // to be papered over here.
+                apnsToken = token,
+                // Android's applicationId, which is `com.memoria.caregiver` and
+                // is NOT iOS's `co.sunny.nemara` (DECISIONS.md D-006). Read from
+                // BuildConfig so the two can never disagree.
+                bundleId = BuildConfig.APPLICATION_ID,
+                // TODO(REQ-8): the one genuinely invented value, and the reason
+                // the flag above exists. FCM has no sandbox/production split at
+                // all — one token, and the environment is resolved server-side
+                // from the service-account key — but the column accepts only
+                // these two strings. iOS's rule (debug builds are sandbox,
+                // release builds are production) is mirrored so that the value
+                // is at least the same rule on both platforms rather than a
+                // constant picked here.
+                environment = if (BuildConfig.DEBUG) {
+                    ApnsEnvironment.SANDBOX
+                } else {
+                    ApnsEnvironment.PRODUCTION
+                },
+            )
+        },
+        deregister = { token -> api.enrollment.deleteDeviceToken(token) },
+        report = { message -> Log.w(PUSH_LOG_TAG, message) },
+    )
+
+    /**
      * The four Realtime channels and the 1-second poll.
      *
      * It takes [api] twice, as its cache and as its camera fetcher, and [api]
@@ -207,10 +271,30 @@ class AppEnvironment(
             // until this returns, because landing on an empty roster that fills
             // in a second later reads as "my patients are gone".
             api.bootstrap()
+            // Move this device's push token onto the caregiver who just signed
+            // in. iOS does the same on `.onChange(of: currentCaregiver?.id)`.
+            // Without it, a care team sharing one phone would leave the token
+            // registered to whoever signed in first: they would keep getting the
+            // alerts and the person actually holding the phone would get none.
+            // Does not suspend and cannot fail sign-in.
+            pushTokens.onSignedIn()
             caregiver
         }
 
         auth.onWillSignOut = {
+            // FIRST, before the cache teardown below and before Supabase drops
+            // the session: de-registering the push token is an authenticated
+            // call, so it has to leave the device while the caregiver's own
+            // token still works. iOS runs it at exactly this point for the same
+            // reason (`AppEnvironment.live()`'s onWillSignOut).
+            //
+            // Awaited rather than fired off, because a cancelled request leaves
+            // the device registered and the next person to pick up this phone
+            // receiving another household's alerts. It swallows its own failures
+            // and caps its own wait, so it can delay sign-out by a few seconds at
+            // worst and can never block it.
+            pushTokens.onWillSignOut()
+
             // BEFORE the Supabase sign-out, and the ordering is the whole point.
             //
             // supabase-kt forwards every auth change to Realtime, and its
@@ -225,11 +309,6 @@ class AppEnvironment(
             // and no unit test constructs a live Realtime client.
             // FINDINGS.md F-33.
             api.teardown()
-
-            // TODO(REQ-8, phase-7): de-register this device's push token while
-            // the session is still valid, so a signed-out caregiver stops
-            // receiving pushes on a device they left. Best-effort by design —
-            // it must never block sign-out.
         }
 
         auth.onSignedOut = {

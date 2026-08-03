@@ -334,5 +334,69 @@ FINDINGS.md F-28.
 
 ---
 
+## D18 — Notifications need a channel, and the channel is a product decision
+**Category:** platform mechanism differs
+
+**iOS:** every notification is one undifferentiated stream. The app declares
+nothing; the only control the caregiver has is the app-wide switch in Settings.
+
+**Android:** an app must declare its own categories, and each one becomes a
+separate row the caregiver can silence, demote, or turn off. **So the channels
+this app declares ARE the mute controls**, and their name and description are
+product copy, read by a person in Settings at the moment they are deciding
+whether to switch alerts off — not identifiers.
+
+**What is declared:** exactly one channel, id `alerts`, named "Alerts", at
+`IMPORTANCE_HIGH` (a sound and a banner, matching APNs priority 10 and iOS's
+`[.banner, .sound, .list]`). The description says in plain words what turning it
+off does, and that email alerts are separate.
+
+**Why not two.** Splitting urgent from routine is the obvious improvement and is
+not buildable: `build_event_payload` carries a title, a body and two ids, with
+nothing that says how urgent the event is. Guessing severity from the title text
+would put a fall on the quiet channel the day the wording changed. **A severity
+field in the payload is what unlocks a second channel, not more client code.**
+
+**Two manifest `meta-data` entries exist for the same reason.** A message
+carrying a `notification` block that arrives while the app is backgrounded is
+drawn by the system, and `onMessageReceived` is never called — so without
+`default_notification_channel_id` those alerts land in Android's unnamed
+"Miscellaneous" channel, which the caregiver's own Alerts setting does not
+reach.
+
+---
+
+## D19 — Where Android asks for notification permission, and why it is not launch
+**Category:** platform mechanism differs · extends D13
+
+**iOS:** `NemaraCaregiverApp` calls `requestAuthorization` from a `.task` on the
+root view, i.e. at launch, and again on every caregiver change. Asking badly
+costs little there: a refusal can be revisited.
+
+**Android:** `POST_NOTIFICATIONS` (API 33+) is one-shot in practice. After the
+second refusal the system stops showing the dialog permanently, and the only way
+back is a trip into Settings that nobody makes. There are two chances, total.
+
+**Decided:** the request fires from `MainShell` — the signed-in surface, and the
+port of `MainTabView` — on the first composition after sign-in. Reaching it means
+the caregiver has just signed in, which is the first moment the app has anything
+to alert them about, and the prompt therefore follows a deliberate action rather
+than ambushing someone on a screen they merely landed on. That is D13's rule,
+applied to the one permission D13 did not cover.
+
+Asking at launch — the literal reading of what iOS does — would spend one of the
+two chances on the welcome screen, before the person has seen a patient.
+
+**No "have we asked before" flag is stored.** The system already enforces the
+two-strike rule, and `request()` returns immediately when the permission is held,
+so a stored flag would only make Android stricter than iOS while adding another
+piece of state to keep in step.
+
+**Below API 33 there is no such permission**, so `rememberNotificationPermission`
+reports granted and asks for nothing. See its own comment for what that branch
+does and does not earn.
+
+---
+
 _(Add entries as they arise. Cosmetic gaps found in the Phase 8 screenshot pass
 go here too, each with a reason or a fix.)_

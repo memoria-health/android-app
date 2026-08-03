@@ -10,4 +10,12 @@
       so these two must stay in sync by hand — keep this list minimal.
     -->
     <color name="paper">#EFE6DA</color>
+
+    <!--
+      The notification accent. Android tints the small icon and the app name in
+      the notification shade with this, and it can only be given as a platform
+      colour resource, so it cannot come from Color.kt. Must stay equal to
+      `Terra` there.
+    -->
+    <color name="terra">#FFA04331</color>
 </resources>

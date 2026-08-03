@@ -23,6 +23,21 @@
     <uses-permission android:name="android.permission.CAMERA" />
 
     <!--
+      Push notifications. iOS asks for the equivalent at launch through
+      UNUserNotificationCenter and needs nothing in Info.plist.
+
+      Android 13 (API 33) turned notifications into a runtime permission. Below
+      33 this line is ignored and notifications are on by default, so the app
+      behaves as it always did on older phones. From 33 up, a missing
+      declaration makes the runtime request fail silently — the same trap that
+      left talk mode and enrollment unusable before D13 — and the app would post
+      notifications that never appear anywhere.
+
+      Where the app asks for it, and why there, is in MainShell.
+    -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!--
       Declared NOT required so the app stays installable on a device with no
       camera. Enrollment is one flow, not the product, and iOS does not gate
       installation on a camera either.
@@ -85,6 +100,48 @@
                 <data android:scheme="nemara" android:host="reset-password" />
             </intent-filter>
         </activity>
+
+        <!--
+          Where FCM delivers. iOS gets both of this service's jobs from
+          AppDelegate callbacks the OS calls on the app object itself; Android
+          requires a declared component, and without this <service> the token
+          callback and every data message go nowhere at all.
+
+          exported="false" because only the system may start it. The action
+          below is what Firebase's own manifest binds to, and it is the whole of
+          the contract — the name of the class is ours.
+        -->
+        <service
+            android:name=".push.MemoriaMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <!--
+          The three below cover the path our code never sees.
+
+          A message that carries a `notification` block and arrives while the app
+          is backgrounded is drawn by the system directly: onMessageReceived is
+          never called, so NotificationChannels and EventNotifications have no
+          say in how it looks. Without these, such a notification lands in
+          Android's unnamed "Miscellaneous" channel — which the caregiver's own
+          "Alerts" setting does not control — with the raw launcher icon and no
+          accent colour.
+
+          The channel id is the SAME string resource NotificationChannels reads,
+          so the channel named here is always the channel the app creates.
+        -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="@string/push_channel_alerts_id" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_push_alert" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/terra" />
     </application>
 
 </manifest>

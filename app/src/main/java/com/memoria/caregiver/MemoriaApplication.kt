@@ -1,9 +1,13 @@
 package com.memoria.caregiver
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
+import com.memoria.caregiver.push.FirebasePushTokens
+import com.memoria.caregiver.push.NotificationChannels
+import com.memoria.caregiver.push.PUSH_LOG_TAG
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -49,12 +53,34 @@ class MemoriaApplication : Application() {
      */
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
-    val environment: AppEnvironment by lazy {
+    private val environmentDelegate = lazy {
         AppEnvironment(scope = appScope, appContext = this)
     }
 
+    val environment: AppEnvironment by environmentDelegate
+
+    /**
+     * The environment **only if something has already built it**, and null
+     * otherwise.
+     *
+     * Exists for exactly one caller: `MemoriaMessagingService`, which the system
+     * can start in a cold process to hand over a push token. Reading
+     * [environment] there would construct the Supabase client, the HTTP client,
+     * the Realtime socket and the analytics worker in a process that exists for
+     * a few hundred milliseconds to write down one string.
+     */
+    val environmentIfCreated: AppEnvironment?
+        get() = if (environmentDelegate.isInitialized()) environmentDelegate.value else null
+
     override fun onCreate() {
         super.onCreate()
+        // Before anything can post a notification, and deliberately before the
+        // first one arrives: a caregiver who wants to see — or pre-emptively
+        // silence — what this app is allowed to interrupt them with should find
+        // the row in Settings on day one. Touches no Firebase and no
+        // environment, so it is safe in the one callback that runs before
+        // everything else. See NotificationChannels.
+        NotificationChannels.ensure(this)
         // Deliberately does NOT touch `environment`. Reading it here would build
         // the Supabase client, the HTTP client and the Realtime socket inside
         // `Application.onCreate`, which is the one callback that runs before
@@ -93,6 +119,19 @@ class MemoriaApplication : Application() {
             if (isFirstForeground) {
                 isFirstForeground = false
                 env.analytics.logLifecycle("app_launch")
+                // The counterpart of iOS calling registerForRemoteNotifications()
+                // at launch. Needed on top of the service's onNewToken because
+                // FCM announces a token only when it is created or rotated — on
+                // an ordinary launch it says nothing at all, so this is the only
+                // thing that keeps the stored token current.
+                //
+                // Reports rather than throws when no Firebase project is
+                // configured, which is the state of this build today (REQ-7).
+                FirebasePushTokens.fetch(
+                    context = this@MemoriaApplication,
+                    onToken = env.pushTokens::onToken,
+                    onUnavailable = { reason -> Log.w(PUSH_LOG_TAG, reason) },
+                )
             }
             env.analytics.logLifecycle("app_foreground")
             appScope.launch {

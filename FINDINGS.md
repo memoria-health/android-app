@@ -369,6 +369,68 @@ that is a sign-in failure.
 
 ---
 
+### F-38 — A locked phone shows the patient's name and the full event narrative
+**Backend · product + DPDP decision · OPEN — reported, deliberately not fixed**
+
+`nemara-backend/src/services/push.py:194`:
+
+```python
+body=f"{patient.preferred_name} — {event.narrative}",
+```
+
+With the phone's default notification setting, a **locked** screen shows both.
+Verified in the backend source, not inferred:
+
+> **Fall detected**
+> Margaret — Margaret fell in the kitchen and has not got up.
+
+No unlock, no authentication. Anyone who can see the phone can read that a named
+person with dementia fell, and where. **This is already live on iOS** — the
+Android port did not introduce it and does not make it worse.
+
+**Not fixed, on purpose.** A client-side truncation would silently diverge the
+two platforms and leave iOS untouched, which is worse than the current state
+being visible. The real options, for whoever decides:
+
+1. Send a generic body (`"New alert — open Memoria"`) and keep the detail behind
+   the app. Safest; costs glanceability, which is much of the product's value.
+2. Keep the name, drop the narrative. A middle ground that still discloses that
+   a named person is being monitored.
+3. Keep it and set `visibility = SECRET` on Android so the system hides content
+   on the lock screen. **Android-only** — iOS has no equivalent the app controls,
+   so the platforms would then genuinely differ, and that would need recording.
+
+The Android client's own conduct is clean: it carries the server's `title` and
+`body` verbatim as opaque strings, never derives text from cached patient data,
+logs nothing from `push/`, and leaves `visibility` at the platform default so the
+caregiver's own "sensitive content" setting governs.
+
+---
+
+### F-39 — REQ-7 is not the only push blocker: the backend has no FCM path at all
+**Backend · Critical for the feature · OPEN**
+
+`push.py` mints an **Apple ES256 JWT** and POSTs to `api.push.apple.com`. Verified
+by count: 18 APNs references, **zero** mentions of FCM, Firebase or googleapis.
+The column is `apns_token` and `environment` is check-constrained to
+`sandbox | production`.
+
+So an FCM token registered today would be POSTed to Apple, rejected, and **on a
+410 the row would be deleted** — a device that registers itself and is then
+silently unregistered, which is worse than never registering.
+
+This is why the client gates registration behind
+`PushTokenRegistrar.backendAcceptsFcmTokens = false` rather than sending
+hopefully, and why the skip is reported in a sentence naming REQ-8 instead of
+being silent.
+
+**The consequence for planning:** `google-services.json` (REQ-7) does not make
+push work. The backend needs an FCM dispatch path and a token namespace that can
+hold both platforms. Q1 framed this as a request-shape question; it is a
+server-capability question.
+
+---
+
 ## RESOLVED
 
 ### F-8 — Regenerate the lost findings
@@ -871,11 +933,13 @@ the previous review, running the other way. Handlers added at all four levels.
 ---
 
 ### F-26 — Phase 7's push stack does not exist, and `nemara://` is dead
-**Phases 7 and 2 · Critical · PUSH STILL OPEN · deep links FIXED 2026-08-03**
+**Phases 7 and 2 · Critical · deep links FIXED 2026-08-03 · push client BUILT
+2026-08-03, delivery still blocked on REQ-7 + REQ-8**
 
-Two separate holes, both verified absent across the whole tree. **The deep-link
-half is fixed and verified on the emulator; the push half is untouched and this
-finding stays open for it.**
+Two separate holes, both verified absent across the whole tree. **Both halves are
+now built.** The push half is no longer missing code; what remains is a Firebase
+project (REQ-7) and a backend contract (REQ-8 / Q1), and the backend turns out to
+need more than the latter — see F-39.
 
 #### Deep links — fixed 2026-08-03
 
@@ -923,9 +987,7 @@ non-`APIError`), so this is a parity-preserving bug, not an Android one. Left
 alone deliberately: the instruction is that error copy is the product's and is
 rendered verbatim. It needs a product decision, not a silent reword.
 
-#### Push — still open
-
-The original entry stands unchanged for this half.
+#### Push — as originally found
 
 **Push.** No `firebase-messaging` or `google-services` dependency, no
 `FirebaseMessagingService`, no `google-services.json`, no `POST_NOTIFICATIONS`,
@@ -941,6 +1003,53 @@ are unreachable. `MainShell` also never calls `drainPendingTap()` the way
 REQ-8 says retrieval and display are unblocked — so per `HARNESS.md` §4c this is
 missing, not deferred. **The fall alert never arrives; the app is a viewer you
 must remember to open.**
+
+#### Push — built 2026-08-03
+
+Everything that does not require a Firebase project. Suite 1994 → 2065.
+
+- **The build tolerates a missing `google-services.json` rather than depending on
+  a placeholder.** The `google-services` plugin is on the classpath and applied
+  **only if the file exists**; when it does not, the build prints `PUSH DISABLED`
+  and carries on. A committed placeholder was rejected because it would ship in
+  the APK and point the SDK at somebody else's Firebase project — a build that
+  looks configured and is not is worse than one that plainly is not. Dropping the
+  real file into `app/` is now the whole of what REQ-7 needs from the build.
+- **`POST_NOTIFICATIONS`**, declared by the app itself rather than inherited from
+  firebase-messaging's manifest (which also declares it, and which is exactly why
+  a test asserts against this repo's own manifest file). Requested from
+  `MainShell` on the first signed-in composition — DIFFERENCES.md D19 for why not
+  at launch.
+- **One notification channel**, `alerts`, created at `Application.onCreate` so a
+  caregiver can find and silence it before the first alert ever fires.
+  DIFFERENCES.md D18 for why one and not two.
+- **`MemoriaMessagingService`**, deliberately thin, and deliberately not touching
+  `AppEnvironment` in a cold push-wakeup process.
+- **The tap round trip.** A notification's `PendingIntent` carries `event_id` and
+  `patient_id`; `MainActivity` reads them on both the cold path (`onCreate`) and
+  the warm path (`onNewIntent`), strips them out of the intent as it does, and
+  calls `DeepLinkRouter.bufferEventTap`. **That call had no producer anywhere in
+  the app before this.** `MainShell` now also drains on appear, as
+  `MainTabView.onAppear` does.
+- **A persistent token store**, which iOS does not need: `AppDelegate.lastAPNsTokenHex`
+  is a plain static field only because iOS re-delivers the APNs token on every
+  launch. FCM announces a token only when it is created or rotated, so the same
+  field on Android would be empty on almost every run — including at sign-out,
+  which is the one moment it has to be there.
+- **Sign-out de-registration**, awaited before the cache teardown so it goes out
+  while the session is still valid, with its own 5s cap so a dead network cannot
+  hold a caregiver on a spinner while they hand the phone over.
+
+**What is stubbed, and it is one boolean.** `PushTokenRegistrar.backendAcceptsFcmTokens`
+is false and nothing is sent. The call itself is written out in `AppEnvironment`
+with the body it would send; the skip is reported in a sentence naming REQ-8,
+because silence here reads exactly like a push system that works and has nothing
+to say (F-32). A test flips the flag and asserts the call happens, so the stub is
+provably one edit rather than dead code. See F-39 for why the backend needs more
+than a contract change.
+
+**Two things this exposed, both reported and not fixed:** the lock-screen content
+(F-38) and the absence of any FCM path in the backend (F-39).
 
 **Deep links, as originally found (fixed above).** `MainActivity` had only a
 MAIN/LAUNCHER intent filter — no `VIEW`/`BROWSABLE`/`scheme="nemara"`, no
@@ -1198,5 +1307,103 @@ not an Android port defect, and the two options pull in different directions:
 
 **Failure guarded:** one caregiver's activity trail persisting on a device handed
 to another, and a top-of-funnel we cannot see on either platform.
+
+---
+
+### F-38 — A push puts the patient's name and the event narrative on the lock screen
+**Phase 7 · Critical · REPORTED, NOT FIXED — product + DPDP decision**
+
+Found while building the Android push client, by reading what the backend
+actually sends rather than what the client does with it.
+
+`nemara-backend/src/services/push.py:_dispatch_one` builds the alert like this:
+
+```python
+payload = build_event_payload(
+    title=event.title,
+    body=f"{patient.preferred_name} — {event.narrative}",
+    ...
+)
+```
+
+So what appears on a locked phone, to whoever is holding it, with the phone's
+default "show all notification content" setting, is:
+
+> **Fall detected**
+> Margaret — Margaret fell in the kitchen and has not got up.
+
+The patient's preferred name and the full event narrative, on the lock screen,
+with no unlock required. This is already true on iOS in production; it is not
+something the Android port introduces.
+
+**Deliberately not fixed, and not worked around on the client either.** Three
+reasons:
+
+1. It is a **product decision** — the whole value of a fall alert may be that it
+   is readable at a glance, and the person who decides that is not the person
+   doing a port.
+2. It is a **DPDP decision.** Health-adjacent personal data displayed on a locked
+   device is exactly the kind of processing counsel's rules in the India
+   deployment note speak to. That needs Zinia's eyes, not a code change.
+3. Any client-side "fix" would be a **divergence between platforms**, which is
+   worse than the exposure: iOS would keep showing the name and Android would
+   not, and nobody would know which was intended.
+
+**What the Android client does instead.** The server's `title` and `body` are
+carried through verbatim, as opaque strings, and are never derived from anything
+this device knows — no patient lookup, no narrative construction, no clip URL,
+and no log line anywhere in `push/` contains any of it. `Notification.visibility`
+is left at the platform default (`VISIBILITY_PRIVATE`), which defers to the
+phone's own "sensitive notification content" setting rather than overriding a
+choice the caregiver already made for their whole device. `EventNotificationsTest`
+pins the fallback copy — used when a message carries no text — as saying nothing
+about anyone, because inventing a friendlier line out of cached patient data is
+precisely the change a well-meaning person would make later.
+
+**The options, for whoever decides:**
+
+- **Leave it.** Fastest to read, worst on a shared or lost phone.
+- **Generic text plus detail in the app** — "Memoria alert · Open to see what
+  happened". Costs a tap at the worst possible moment.
+- **Per-caregiver preference**, defaulting to generic. A settings row, a column,
+  and a branch in `build_event_payload`. Most work; the only option that does not
+  decide on someone else's behalf.
+
+**Failure guarded:** none yet. This finding is the record, not the fix.
+
+---
+
+### F-39 — The backend has no FCM path at all, so `google-services.json` alone will not deliver a push
+**Phase 7 · High · OPEN — backend work, not client work**
+
+REQUIREMENTS.md REQ-7 calls `google-services.json` "THE ONE BLOCKER ON PUSH".
+Reading `nemara-backend/src/` while wiring the client shows that is understated.
+The backend is **APNs-only, end to end**:
+
+- `src/services/push.py` mints an Apple ES256 provider JWT, POSTs over HTTP/2 to
+  `api.push.apple.com` or `api.sandbox.push.apple.com`, and treats a 410 as
+  "delete this row". There is no Firebase dependency, no service-account key, no
+  FCM send anywhere in the tree.
+- `src/db/caregiver_device.py` has one token column, `apns_token`, plus an
+  `environment` column constrained to `sandbox | production`.
+- `src/api/devices.py` and `src/schemas/devices.py` accept exactly that shape.
+
+So an Android device that registered successfully today would have its FCM token
+stored in `apns_token`, POSTed to Apple, rejected, and — on the 410 — its row
+deleted. **The "harmless" version of guessing the contract is a device that
+registers itself and is silently unregistered again**, which is indistinguishable
+from push simply not working.
+
+This is why `PushTokenRegistrar.backendAcceptsFcmTokens` is false and nothing is
+sent, rather than the client sending hopefully and letting the server sort it
+out.
+
+**What the backend needs, in addition to REQ-7:** a `platform` discriminator (or
+a sibling route), a token column that is not named for Apple, a nullable
+`environment`, an FCM send path with a service-account credential, and a decision
+about what an Android payload looks like given F-38.
+
+**Failure guarded:** the belief that dropping one JSON file into `app/` turns
+push on.
 
 ---
