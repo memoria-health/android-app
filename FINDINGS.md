@@ -137,6 +137,38 @@ aim away from the class of effect D15 says the split endangers), and M-1..M-7.
 
 ---
 
+### F-16 — I committed a deliberate test mutation into main source
+**Process · Critical (caught) · 2026-08-02**
+
+Commit `58ba95a` used `git add -A` while an agent was mid mutation-test, and
+captured `PatientDetectorsUiState.kt` with its M1 mutation applied:
+
+```kotlin
+val customs: List<Detector>
+    get() = detectors.filter { it.source == Detector.Source.PRESET }   // was CUSTOM
+```
+
+Every detector would have been listed under **both** BUILT-IN and CUSTOM. It is
+plainly visible on screen, so it would not have survived long — but it was in a
+commit, it was in a green suite, and the only reason it did not stay there is
+that the agent reported it in its own write-up. **I did not notice, and no gate
+would have.** The agent's tests passed because it had already restored the file
+in its working tree; `git add -A` picked up the wrong moment, not the wrong file.
+
+**The rule this establishes:** never `git add -A` while agents are running.
+Stage explicitly, or wait for every agent to report. Mutation testing means
+main-source files are deliberately broken for seconds at a time, and a blanket
+stage is a coin flip over that window.
+
+Related: the same window produced repeated Gradle failures from several agents
+running `testDebugUnitTest` against one shared build directory
+(`~/.gradle-builds/memoria-caregiver-android`), which surface as
+`EOFException` or `NoSuchFileException: in-progress-results-generic.bin` and
+report a stale summary. Not a code defect, but it makes "the suite is green"
+unreliable exactly when several agents are finishing at once.
+
+---
+
 ### F-3 — Scene luma is measured on a different scale than iOS
 **Phase 6 · Important · CONFIRMED 2026-08-02 · needs a device to fix correctly**
 

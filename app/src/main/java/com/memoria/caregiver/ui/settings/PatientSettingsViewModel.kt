@@ -273,12 +273,11 @@ class PatientSettingsViewModel(
         _local.update { it.copy(isUploadingPhoto = true, photoUploadError = null) }
         viewModelScope.launch {
             try {
-                val updated = api.patientsDirect.uploadPatientPhoto(
-                    patientId,
-                    imageData,
-                    contentType,
-                )
-                api.patients = api.patients.map { if (it.id == updated.id) updated else it }
+                // Through the client, not patientsDirect: the client owns the
+                // cache swap. This ViewModel did it itself while the client had
+                // no wrapper, which is the two-places-one-mutation shape
+                // DIFFERENCES.md D15 warns about.
+                api.uploadPatientPhoto(patientId, imageData, contentType)
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (e: Throwable) {
@@ -302,10 +301,9 @@ class PatientSettingsViewModel(
         _local.update { it.copy(photoUploadError = null) }
         viewModelScope.launch {
             try {
-                api.patientsDirect.deletePatientPhoto(patientId)
-                api.patients = api.patients.map {
-                    if (it.id == patientId) it.copy(photoStorageKey = null) else it
-                }
+                // The client clears photoStorageKey in place — the delete
+                // returns no body, so the row is edited rather than replaced.
+                api.deletePatientPhoto(patientId)
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (e: Throwable) {

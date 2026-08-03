@@ -33,7 +33,11 @@ import com.memoria.caregiver.ui.events.EventsListViewModel
 import com.memoria.caregiver.ui.nav.MainShell
 import com.memoria.caregiver.ui.cameras.CameraListScreen
 import com.memoria.caregiver.ui.cameras.CameraListViewModel
+import com.memoria.caregiver.ui.detectors.PatientDetectorsScreen
+import com.memoria.caregiver.ui.detectors.PatientDetectorsViewModel
 import com.memoria.caregiver.ui.patient.PatientShell
+import com.memoria.caregiver.ui.settings.PatientSettingsScreen
+import com.memoria.caregiver.ui.settings.PatientSettingsViewModel
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.memoria.caregiver.ui.settings.AppSettingsViewModel
@@ -170,6 +174,24 @@ private fun PatientRoute(
         key = "cameras:$patientId",
         factory = viewModelFactory { initializer { CameraListViewModel(env.api, patientId) } },
     )
+    val detectorsViewModel: PatientDetectorsViewModel = viewModel(
+        key = "detectors:$patientId",
+        factory = viewModelFactory { initializer { PatientDetectorsViewModel(env.api, patientId) } },
+    )
+    val patientSettingsViewModel: PatientSettingsViewModel = viewModel(
+        key = "patientSettings:$patientId",
+        factory = viewModelFactory {
+            initializer {
+                PatientSettingsViewModel(
+                    api = env.api,
+                    patientId = patientId,
+                    auth = env.auth,
+                    peopleBlur = env.peopleBlur,
+                    onDeleted = onHome,
+                )
+            }
+        },
+    )
 
     PatientShell(
         patient = patient,
@@ -202,11 +224,50 @@ private fun PatientRoute(
                 onAddSensor = {},
             )
         },
-        // No PatientDetectorsScreen exists — it was never ported (FINDINGS.md
-        // F-14). DetectorRow and DetectorDetailSheet are built; nothing composes
-        // them into the tab's list.
-        detectorsContent = { TabStub("Detectors") },
-        settingsContent = { TabStub("Settings") },
+        detectorsContent = {
+            val detectorState by detectorsViewModel.state.collectAsState()
+            // The wandering-door configs are fetched on entry, not in init:
+            // the tab may never be opened, and the request is per-camera.
+            LaunchedEffect(detectorsViewModel) { detectorsViewModel.loadDoorConfigs() }
+            PatientDetectorsScreen(
+                state = detectorState,
+                onToggleDetector = detectorsViewModel::toggleDetector,
+                onDeleteDetector = detectorsViewModel::deleteDetector,
+                onLoadDoorConfigs = detectorsViewModel::loadDoorConfigs,
+                // Authoring and the library are presented flows; their
+                // ViewModels exist and tested. Wiring them is the next slice.
+                onAddCustomDetector = {},
+                onOpenLibrary = {},
+                onEditDetector = {},
+            )
+        },
+        settingsContent = {
+            val settingsState by patientSettingsViewModel.state.collectAsState()
+            // The enrollment summary poll, run from the tab so it stops when the
+            // caregiver leaves it — same reasoning as the events feed poll.
+            LaunchedEffect(patientSettingsViewModel) {
+                patientSettingsViewModel.runEnrollmentPoll()
+            }
+            PatientSettingsScreen(
+                state = settingsState,
+                resolvePhotoUrl = patientSettingsViewModel::resolvePhotoUrl,
+                onRemovePhoto = patientSettingsViewModel::removePhoto,
+                onEmailAlertsEnabledChange = patientSettingsViewModel::setEmailAlertsEnabled,
+                onEmailDraftChange = patientSettingsViewModel::setEmailDraft,
+                onEmailRecipientsChange = patientSettingsViewModel::setEmailRecipients,
+                onEmailValidationError = patientSettingsViewModel::showEmailValidationError,
+                onSendTestEmail = patientSettingsViewModel::sendTestEmail,
+                onPeopleBlurChange = patientSettingsViewModel::setPeopleBlur,
+                onAudioCaptureChange = patientSettingsViewModel::setAudioCapture,
+                onDataCollectionChange = patientSettingsViewModel::setDataCollectionEnabled,
+                onRemovePatient = patientSettingsViewModel::deletePatient,
+                // Each of these PRESENTS something that is not built yet: a
+                // photo picker, the enrollment flow, the feedback sheet.
+                onPickPhoto = {},
+                onEnroll = {},
+                onOpenFeedback = {},
+            )
+        },
     )
 
     // The detail sheet is not wired yet, so the open-event latch must still be

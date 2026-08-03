@@ -54,7 +54,7 @@ data class PatientDetectorsState(
         get() = detectors.filter { it.source == Detector.Source.PRESET }
 
     val customs: List<Detector>
-        get() = detectors.filter { it.source == Detector.Source.PRESET }
+        get() = detectors.filter { it.source == Detector.Source.CUSTOM }
 
     /** The header chip. Counts the whole set, not one section. */
     val activeCount: Int

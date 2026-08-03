@@ -11,6 +11,7 @@ import com.memoria.caregiver.data.realtime.CameraLiveState
 import com.memoria.caregiver.data.realtime.InMemoryEverOnlineStore
 import com.memoria.caregiver.data.realtime.RealtimeStore
 import com.memoria.caregiver.data.realtime.SharedPrefsEverOnlineStore
+import com.memoria.caregiver.ui.live.PeopleBlurStore
 import com.memoria.caregiver.ui.nav.DeepLinkRouter
 import io.github.jan.supabase.auth.Auth
 import io.github.jan.supabase.createSupabaseClient
@@ -88,6 +89,21 @@ class AppEnvironment(
             ?.getSharedPreferences(EVER_ONLINE_PREFS, Context.MODE_PRIVATE)
             ?.let { SharedPrefsEverOnlineStore(it) }
             ?: InMemoryEverOnlineStore(),
+    )
+
+    /**
+     * Per-device people-blur preference. Device-local by design: iOS keeps it in
+     * `UserDefaults` rather than on the patient row, because it is a viewing
+     * choice made by this caregiver on this phone, not a property of the
+     * household.
+     *
+     * H-12 still applies — the toggle currently blurs nothing, because no person
+     * detector is vendored (REQ-23).
+     */
+    val peopleBlur = PeopleBlurStore(
+        prefs = requireNotNull(appContext) {
+            "PeopleBlurStore needs a Context; AppEnvironment was built without one."
+        }.getSharedPreferences(PEOPLE_BLUR_PREFS, Context.MODE_PRIVATE),
     )
 
     val api = NemaraApiClient(
@@ -183,5 +199,8 @@ class AppEnvironment(
          * The file name is Android-only; the key inside matches.
          */
         const val EVER_ONLINE_PREFS = "com.memoria.caregiver.live"
+
+        /** iOS keys the same preference off `UserDefaults` directly. */
+        const val PEOPLE_BLUR_PREFS = "com.memoria.caregiver.peopleblur"
     }
 }
