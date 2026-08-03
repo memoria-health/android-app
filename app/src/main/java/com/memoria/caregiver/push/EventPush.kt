@@ -28,8 +28,10 @@ data class EventTap(
  * holding the phone. If the app ever looked any of that up to make a nicer
  * notification, it would be the port that introduced the leak.
  *
- * What the server currently sends is a separate matter and is recorded in
- * FINDINGS.md, not fixed here.
+ * What the server sends is a separate matter, settled separately: as of
+ * 2026-08-03 the body is the patient's preferred name and no longer the event
+ * narrative (FINDINGS.md F-38). That was a backend change precisely because this
+ * rule holds — there was nothing to change here.
  *
  * They are nullable because a payload can legitimately arrive without them (a
  * data-only message), and because a push that we cannot label is still a push we

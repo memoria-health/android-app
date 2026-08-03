@@ -370,7 +370,39 @@ that is a sign-in failure.
 ---
 
 ### F-38 — A locked phone shows the patient's name and the full event narrative
-**Backend · product + DPDP decision · OPEN — reported, deliberately not fixed**
+**Backend · product + DPDP decision · FIXED 2026-08-03 — option 2 chosen by Aryaman**
+
+**Resolution.** The body is now the patient's preferred name alone:
+
+```python
+body=patient.preferred_name,
+```
+
+One change, in `nemara-backend/src/services/push.py`, and it fixes **both**
+platforms at once — neither client composes notification text. iOS renders the
+APNs `aps.alert` the system hands it (`AppDelegate` only handles taps and
+foreground presentation), and Android carries the server's strings through
+verbatim by design. There was no iOS change to make and no Android change to
+make; the ask was a one-repo change wearing a two-repo costume.
+
+Checked before shipping, not assumed: event titles come from `_event_title_for`
+and are always generic (`"Possible fall"`, or `"Possible <detector name>"` for
+customs). They carry no name and no narrative, so title + name discloses less
+than the title alone might have. `preferred_name` is a non-null column, so the
+body can never arrive blank.
+
+The test now asserts the exact body **and** that the narrative appears nowhere in
+the serialised payload — the equality alone would have passed if someone changed
+the seeded narrative instead of the code.
+
+Residual, and accepted with the choice: the alert still says a named person is
+being monitored and roughly what happened, since the title names the event type.
+Option 1 was the only one that removed that, and it costs the glanceability the
+product is largely for.
+
+The original finding follows.
+
+---
 
 `nemara-backend/src/services/push.py:194`:
 
