@@ -139,10 +139,9 @@ fun PatientShell(
                 PatientTab.entries.forEach { entry ->
                     NavigationBarItem(
                         selected = tab == entry,
-                        onClick = {
-                            tab = entry
-                            analytics.logScreen(entry.analyticsName)
-                        },
+                        // Selection only. The screen event fires where the tab's
+                        // content is drawn — see the LaunchedEffect below.
+                        onClick = { tab = entry },
                         icon = {
                             Icon(
                                 imageVector = entry.glyph,
@@ -171,6 +170,16 @@ fun PatientShell(
             }
         },
     ) { insets ->
+        // iOS attaches `.trackScreen()` to each tab's content, which is an
+        // `onAppear`, so it fires for the tab a caregiver lands on as well as
+        // for one they pick. Logging from the tab bar's onClick instead recorded
+        // neither: Live is where every patient opens, so the most-visited screen
+        // in the app was invisible, and a notification tap — which selects the
+        // Events tab in code, not by touch — went unrecorded too. Firing here,
+        // where the content is drawn, is the port of onAppear and is the only
+        // instrumentation point for these five screens, so a tab added to the
+        // enum cannot go untracked (HARDENING.md H-10).
+        LaunchedEffect(tab) { analytics.logScreen(tab.analyticsName) }
         Column(Modifier.padding(insets).fillMaxSize()) {
             PatientHeader(
                 patient = patient,

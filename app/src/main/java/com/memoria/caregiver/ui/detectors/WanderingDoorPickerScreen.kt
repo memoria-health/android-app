@@ -876,6 +876,11 @@ private fun Controls(
     ) {
         NemaraButton(
             title = setExitDoorsTitle(count),
+            // The title is built at runtime, so it gets an explicit label:
+            // `logButton` falls back to the title, and every analytics
+            // label in this app is a fixed string. A dynamic one would
+            // also split one button into several events in the funnel.
+            track = "wandering_door.set_exit_doors",
             // iOS pairs .disabled with an explicit .opacity, because its
             // NemaraButton does not dim on its own (and neither does ours).
             modifier = Modifier.alpha(if (count == 0) 0.5f else 1f),

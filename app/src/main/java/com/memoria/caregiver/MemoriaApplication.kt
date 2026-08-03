@@ -55,6 +55,12 @@ class MemoriaApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // Deliberately does NOT touch `environment`. Reading it here would build
+        // the Supabase client, the HTTP client and the Realtime socket inside
+        // `Application.onCreate`, which is the one callback that runs before
+        // anything else is ready — and it takes every Robolectric test down with
+        // it, because Robolectric calls onCreate for each one. The first
+        // lifecycle event is logged from the observer instead; see below.
         ProcessLifecycleOwner.get().lifecycle.addObserver(ForegroundObserver())
     }
 
@@ -68,8 +74,27 @@ class MemoriaApplication : Application() {
      */
     private inner class ForegroundObserver : DefaultLifecycleObserver {
 
+        /**
+         * Whether this is the app coming up for the first time in this process,
+         * rather than returning from the background.
+         */
+        private var isFirstForeground = true
+
         override fun onStart(owner: LifecycleOwner) {
             val env = environment
+            // iOS logs app_launch from `NemaraCaregiverApp.init` and
+            // app_foreground from the first `scenePhase == .active`, which are
+            // milliseconds apart. Both are logged here, in that order, so a cold
+            // launch produces the same pair on both platforms and a return from
+            // the background produces app_foreground alone.
+            //
+            // app_launch is the denominator for every funnel in the app: without
+            // it, "12 caregivers added a patient" has no "out of how many".
+            if (isFirstForeground) {
+                isFirstForeground = false
+                env.analytics.logLifecycle("app_launch")
+            }
+            env.analytics.logLifecycle("app_foreground")
             appScope.launch {
                 // Order matters and is the Swift's. Re-read first, because the
                 // socket may have been dead for the whole background stretch and
@@ -82,9 +107,18 @@ class MemoriaApplication : Application() {
         }
 
         override fun onStop(owner: LifecycleOwner) {
+            val env = environment
+            // Logged BEFORE the snapshot below, so app_background is itself part
+            // of what gets written to disk.
+            env.analytics.logLifecycle("app_background")
+            // iOS calls this "the last moment before suspension". Here it is the
+            // last callback of any kind: a backgrounded Android process can be
+            // killed with no further notice, so anything still only in memory
+            // when this returns is lost. Both halves are fire-and-forget.
+            env.analytics.persistAndFlush()
             // The half iOS gets from process suspension. Without it the poll runs
             // forever in the background.
-            environment.realtime.stopStatePolling()
+            env.realtime.stopStatePolling()
         }
     }
 }

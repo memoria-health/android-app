@@ -18,7 +18,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,7 +32,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.memoria.caregiver.analytics.LocalAnalytics
 import com.memoria.caregiver.data.model.Detector
 import com.memoria.caregiver.ui.components.NemaraCamFeedPlaceholder
 import com.memoria.caregiver.ui.components.NemaraCard
@@ -83,18 +81,16 @@ fun EventDetailScreen(
     modifier: Modifier = Modifier,
     clipPlayer: @Composable (url: String) -> Unit,
 ) {
-    val analytics = LocalAnalytics.current
-    // iOS: PatientEventsView attaches .trackScreen("event_detail") to this view
-    // when it presents the sheet. Kept with the screen so the event cannot be
-    // lost by a host that forgets to attach it.
+    // Screen tracking is NOT here. `ModalOverlay(screen = "event_detail")` logs
+    // it at the point this is presented, the way iOS's `.trackScreen()` does, so
+    // a screen cannot ship untracked and no view is counted twice. See
+    // ModalOverlay and HARDENING.md H-10.
+    //
+    // One view per event opened still holds: the host wraps the overlay in
+    // `key(event.id)`, so swapping the presented event in place — a deep link
+    // arriving while the sheet is open — is a new composition and logs again.
     val event = state.event
 
-    // Keyed on the event id, not Unit. iOS presents this as a sheet and gets a
-    // fresh view identity per event, so it logs one screen view per event
-    // opened. Keyed on Unit, a host that swaps the presented event in place —
-    // a deep link arriving while the sheet is open, or next/previous
-    // navigation — logs the first event and then goes silent.
-    LaunchedEffect(event.id) { analytics.logScreen("event_detail") }
     val isSafety = event.category == Detector.Category.SAFETY
     val tone = if (isSafety) Terra else Sky
     val toneSoft = if (isSafety) TerraSoft else SkySoft

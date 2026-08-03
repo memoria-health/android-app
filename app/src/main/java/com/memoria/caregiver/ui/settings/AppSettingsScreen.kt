@@ -16,7 +16,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -27,7 +26,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.memoria.caregiver.analytics.LocalAnalytics
 import com.memoria.caregiver.data.model.Patient
 import com.memoria.caregiver.ui.components.NemaraAvatar
 import com.memoria.caregiver.ui.components.NemaraButton
@@ -94,11 +92,11 @@ fun AppSettingsScreen(
     onDeleteAccount: () -> Unit,
     onDismissDeleteError: () -> Unit,
 ) {
-    // iOS attaches .trackScreen("settings") where MainTabView builds this tab.
-    // Fired from the screen here, like every other ported screen — see
-    // HARDENING.md H-10 for why that is a known structural weakness.
-    val analytics = LocalAnalytics.current
-    LaunchedEffect(Unit) { analytics.logScreen("settings") }
+    // Screen tracking is NOT here. iOS attaches `.trackScreen("settings")` where
+    // MainTabView builds this tab, and MainShell now does the same — so this
+    // screen firing its own event as well produced TWO `settings` rows for one
+    // view, which silently doubled the count of the app's second-most-visited
+    // screen. See HARDENING.md H-10.
 
     var showDeleteConfirm by remember { mutableStateOf(false) }
 

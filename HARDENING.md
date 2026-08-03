@@ -215,9 +215,41 @@ surfaces rather than silently disabling the button forever.
 ---
 
 ## H-10 — Screen analytics fire from inside screens, not from the nav host
-**Phase 2 · PARTIALLY FIXED 2026-08-02** — the missing `forgot_password` event
-is now fired. The structural problem stands: tracking still lives in each
-screen, so a screen added without the line is silently untracked.
+**Phase 2 · FIXED 2026-08-03** — tracking moved to the presenters, where iOS's
+`.trackScreen()` modifier sits.
+
+**What changed:**
+
+- **`ModalOverlay` takes a required `screen: String`.** It is the one composable
+  every full-surface overlay in the app goes through, and it logs on appearance.
+  A new overlay does not compile until it names a screen, which is as structural
+  as this gets without a navigation graph. Thirteen destinations now named; the
+  six screens that were silently untracked — Roster, New patient, Pairing code,
+  Add detector, Detector library and the data-collection consent sheet — are
+  covered. The screens that used to log themselves and are presented this way no
+  longer do, or every view would count twice.
+- **Both tab bars log where the tab's content is drawn, not in `onClick`.** iOS's
+  modifier is an `onAppear`; logging on tap lost the tab every session STARTS on
+  (Home, and Live for every patient) and every tab the app selects for itself
+  (the Events tab a notification lands on). That was the busiest screen in the
+  app reading as unvisited.
+- **`AppSettingsScreen` stopped logging `settings` itself.** With the tab bar
+  logging it too, one view produced two rows.
+
+**What is pinned:** `ScreenTrackingCoverageTest` asserts the complete set of
+screen names the app can emit against the 27 iOS `.trackScreen()` names, asserts
+both shells log from a `LaunchedEffect(tab)` and not from `onClick`, and asserts
+no `ModalOverlay` call omits its screen. `ModalOverlayTest` pins that presenting
+logs once and that a swapped screen at the same call site logs again.
+
+**Still per-screen, deliberately:** the four signed-out auth screens and the
+password-reset cover. They are all correctly tracked today, `Routes` is not a
+clean enumeration of destinations (it also carries argument keys and constants no
+graph uses), and rebuilding it to hang tracking off `currentBackStackEntry` would
+churn a nav host whose tests already flake (F-36) for no coverage gain. The
+coverage test is what stops one going missing.
+
+**Original entry, for the record:**
 
 Each auth screen calls `logScreen(...)` from its own `LaunchedEffect`, mirroring
 iOS's `.trackScreen()` modifier. It works, but it means a screen added without

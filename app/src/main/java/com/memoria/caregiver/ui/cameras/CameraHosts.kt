@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.memoria.caregiver.analytics.LocalAnalytics
 import com.memoria.caregiver.data.remote.ApiError
 import com.memoria.caregiver.data.remote.NemaraApiClient
 import com.memoria.caregiver.ui.nav.NotBuiltScreen
@@ -153,6 +154,18 @@ private fun PairingCodeHost(
     }
 
     BackHandler(onBack = onClose)
+
+    // iOS: `.trackScreen("pairing_code")` on the sheet in CameraDetailView. This
+    // host is where the sheet is presented, so tracking sits here for the same
+    // reason ModalOverlay carries it — with the presenter, never with the screen
+    // (HARDENING.md H-10). It was missing entirely (FINDINGS.md F-28).
+    //
+    // The label is the fixed string "pairing_code" and nothing else. The pairing
+    // code itself is a credential for joining a household's camera and must
+    // never appear in an analytics event, a property or a log line.
+    val analytics = LocalAnalytics.current
+    LaunchedEffect(cameraId) { analytics.logScreen("pairing_code") }
+
     PairingCodeSheet(
         state = PairingCodeState(room = room, phase = phase),
         modifier = modifier,

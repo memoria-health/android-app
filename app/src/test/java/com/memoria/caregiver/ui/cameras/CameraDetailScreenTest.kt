@@ -366,6 +366,11 @@ class CameraDetailScreenTest {
         val analytics = RecordingAnalytics()
         setUp(connected, analytics = analytics)
 
-        assertEquals(listOf("camera_detail"), analytics.names("screen"))
+        // Screen tracking moved to the presenter, where iOS puts it:
+        // `ModalOverlay(screen = "camera_detail")` logs it when this is presented,
+        // so a new overlay cannot ship untracked (HARDENING.md H-10).
+        // ModalOverlayTest pins the presenter's behaviour and
+        // ScreenTrackingCoverageTest pins the name.
+        assertEquals(emptyList<String>(), analytics.names("screen"))
     }
 }

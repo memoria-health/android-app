@@ -67,7 +67,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.memoria.caregiver.analytics.LocalAnalytics
 import com.memoria.caregiver.ui.components.NemaraButton
 import com.memoria.caregiver.ui.components.NemaraButtonSize
 import com.memoria.caregiver.ui.components.NemaraButtonVariant
@@ -123,8 +122,10 @@ fun FeedbackScreen(
     // (PatientShell and PatientSettingsView), not on FeedbackView itself. It is
     // logged here for the same reason ForgotPasswordScreen logs its own: a
     // screen event that lives on the caller is one the next caller forgets.
-    val analytics = LocalAnalytics.current
-    LaunchedEffect(Unit) { analytics.logScreen("feedback") }
+    // Screen tracking is NOT here. `ModalOverlay(screen = "feedback")` logs it at
+    // the point this is presented, the way iOS's `.trackScreen()` does, so a
+    // screen cannot ship untracked and no view is counted twice. See
+    // ModalOverlay and HARDENING.md H-10.
 
     // `.sensoryFeedback(.success, trigger: submitted)` — a physical "it went
     // through" beyond the visual confirmation. SwiftUI fires on a CHANGE of the

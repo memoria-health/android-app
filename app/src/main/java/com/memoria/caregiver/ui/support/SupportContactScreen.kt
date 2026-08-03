@@ -18,7 +18,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -29,7 +28,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
-import com.memoria.caregiver.analytics.LocalAnalytics
 import com.memoria.caregiver.ui.components.NemaraField
 import com.memoria.caregiver.ui.components.NemaraEyebrow
 import com.memoria.caregiver.ui.theme.Card
@@ -75,8 +73,10 @@ fun SupportContactScreen(
     // PRESENTED, in AppSettingsView. Logged here for the reason FeedbackScreen
     // gives: a screen event that lives on the caller is one the next caller
     // forgets.
-    val analytics = LocalAnalytics.current
-    LaunchedEffect(Unit) { analytics.logScreen("support_contact") }
+    // Screen tracking is NOT here. `ModalOverlay(screen = "support_contact")` logs it at
+    // the point this is presented, the way iOS's `.trackScreen()` does, so a
+    // screen cannot ship untracked and no view is counted twice. See
+    // ModalOverlay and HARDENING.md H-10.
 
     Column(modifier = modifier.fillMaxSize().background(Paper)) {
 

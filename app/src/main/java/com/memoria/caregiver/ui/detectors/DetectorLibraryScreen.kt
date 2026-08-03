@@ -379,6 +379,11 @@ private fun Footer(state: DetectorLibraryState, onSubmit: () -> Unit) {
         val inert = state.isSubmitting || state.footerDisabled
         NemaraButton(
             title = state.footerTitle,
+            // The title is built at runtime, so it gets an explicit label:
+            // `logButton` falls back to the title, and every analytics
+            // label in this app is a fixed string. A dynamic one would
+            // also split one button into several events in the funnel.
+            track = "detector_library.submit",
             variant = NemaraButtonVariant.Primary,
             block = true,
             enabled = !inert,

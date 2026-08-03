@@ -21,7 +21,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -35,7 +34,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.memoria.caregiver.analytics.LocalAnalytics
 import com.memoria.caregiver.data.model.DetectionEvent
 import com.memoria.caregiver.ui.components.NemaraButton
 import com.memoria.caregiver.ui.components.NemaraButtonSize
@@ -97,8 +95,10 @@ fun EventReviewScreen(
     // Keyed on the event id rather than Unit, exactly as EventDetailScreen is: a
     // host that swaps the reviewed event in place would otherwise log the first
     // one and then go silent.
-    val analytics = LocalAnalytics.current
-    LaunchedEffect(state.event.id) { analytics.logScreen("event_review") }
+    // Screen tracking is NOT here. `ModalOverlay(screen = "event_review")` logs it at
+    // the point this is presented, the way iOS's `.trackScreen()` does, so a
+    // screen cannot ship untracked and no view is counted twice. See
+    // ModalOverlay and HARDENING.md H-10.
 
     Column(modifier = modifier.fillMaxSize().background(Paper)) {
 

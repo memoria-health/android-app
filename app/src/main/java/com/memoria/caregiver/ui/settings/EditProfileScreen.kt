@@ -21,7 +21,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import com.memoria.caregiver.analytics.LocalAnalytics
 import com.memoria.caregiver.ui.components.NemaraField
 import com.memoria.caregiver.ui.theme.Danger
 import com.memoria.caregiver.ui.theme.Ink
@@ -70,8 +69,10 @@ fun EditProfileScreen(
     onSave: () -> Unit,
 ) {
     // iOS: `.trackScreen("edit_profile")` on the sheet, applied by the presenter.
-    val analytics = LocalAnalytics.current
-    LaunchedEffect(Unit) { analytics.logScreen("edit_profile") }
+    // Screen tracking is NOT here. `ModalOverlay(screen = "edit_profile")` logs it at
+    // the point this is presented, the way iOS's `.trackScreen()` does, so a
+    // screen cannot ship untracked and no view is counted twice. See
+    // ModalOverlay and HARDENING.md H-10.
 
     // `.onAppear(perform: hydrate)`. Keyed on Unit so it fires once per
     // presentation, which is what onAppear does for a sheet.

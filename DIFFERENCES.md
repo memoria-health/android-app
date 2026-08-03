@@ -312,5 +312,27 @@ name is actually resolved rather than skimmed.
 
 ---
 
+## D17 — Android sends one screen name iOS does not, and stamps a different device string
+**Category:** deliberate addition, plus a platform substitution
+
+**`detector_detail`.** iOS never attached `.trackScreen()` to its detector
+editor, so that screen is invisible in the iOS funnel. On Android the editor is
+presented through `ModalOverlay`, whose `screen` parameter is required — the
+whole point of the mechanism is that there is no way to opt a screen out. So it
+is named. The alternative was to build an opt-out, which is the exact hole H-10
+exists to close.
+
+**`device_model`.** iOS sends the raw hardware identifier from `uname` — e.g.
+`iPhone15,3`. Android sends `Build.MODEL`, the marketing name — e.g. `Pixel 8`.
+There is no Android equivalent of the hardware id that is both stable and
+readable, and the column is free text. Neither string says anything about who is
+holding the device.
+
+**`app_launch` timing.** iOS logs it from `NemaraCaregiverApp.init`; Android logs
+it from the first `onStart` rather than from `Application.onCreate`. Reasoning in
+FINDINGS.md F-28.
+
+---
+
 _(Add entries as they arise. Cosmetic gaps found in the Phase 8 screenshot pass
 go here too, each with a reason or a fix.)_

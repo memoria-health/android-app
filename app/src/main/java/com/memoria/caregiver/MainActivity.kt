@@ -26,7 +26,6 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.memoria.caregiver.analytics.LocalAnalytics
 import coil3.compose.AsyncImage
 import androidx.compose.ui.layout.ContentScale
-import com.memoria.caregiver.analytics.NoOpAnalytics
 import com.memoria.caregiver.ui.components.LocalAvatarPhoto
 import com.memoria.caregiver.ui.auth.AuthViewModel
 import com.memoria.caregiver.ui.components.NemaraButton
@@ -35,6 +34,7 @@ import com.memoria.caregiver.ui.components.NemaraEyebrow
 import com.memoria.caregiver.ui.home.RosterViewModel
 import com.memoria.caregiver.ui.nav.AuthNavHost
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -151,11 +151,13 @@ class MainActivity : ComponentActivity() {
             // called from the taps that mean "start enrollment" — the identity
             // card's Enroll row. See RuntimePermission.kt and DIFFERENCES.md D13.
             val cameraPermission = rememberEnrollmentPermission()
-            // The real analytics transport lands in Phase 8. Until then the
-            // no-op sink keeps every component's internal logging call valid
-            // without inventing a half-built pipeline.
             CompositionLocalProvider(
-                LocalAnalytics provides NoOpAnalytics,
+                // The real sink, from the Application-scoped environment, so the
+                // buffer and its flush worker outlive this Activity — a
+                // configuration change must not restart a session or drop what
+                // is buffered. Every NemaraButton, NemaraToggle and screen in the
+                // tree below logs through this.
+                LocalAnalytics provides env.analytics,
                 // REQ-22 / DIFFERENCES.md D8. The design system deliberately owns
                 // no image dependency, so the one renderer is provided here, once,
                 // and every avatar in the app picks it up. Until this existed,
@@ -221,7 +223,7 @@ class MainActivity : ComponentActivity() {
                                     onPrivacy = { showPrivacy = true },
                                     onContactSupport = { showSupport = true },
                                 )
-                                if (showAddPatient) ModalOverlay {
+                                if (showAddPatient) ModalOverlay(screen = "new_patient") {
                                     NewPatientHost(
                                         api = env.api,
                                         // Handed down for the enrollment step at
@@ -232,7 +234,7 @@ class MainActivity : ComponentActivity() {
                                         onDismiss = { showAddPatient = false },
                                     )
                                 }
-                                if (showEditProfile) ModalOverlay {
+                                if (showEditProfile) ModalOverlay(screen = "edit_profile") {
                                     val me by env.auth.currentCaregiver.collectAsState()
                                     EditProfileHost(
                                         caregiver = me,
@@ -241,7 +243,7 @@ class MainActivity : ComponentActivity() {
                                         onDismiss = { showEditProfile = false },
                                     )
                                 }
-                                if (showPrivacy) ModalOverlay {
+                                if (showPrivacy) ModalOverlay(screen = "privacy_policy") {
                                     // The one row in this task with nothing to
                                     // reach. iOS's `PrivacyPolicyView` is 280
                                     // lines of bundled policy text and has no
@@ -259,7 +261,7 @@ class MainActivity : ComponentActivity() {
                                         onBack = { showPrivacy = false },
                                     )
                                 }
-                                if (showSupport) ModalOverlay { ScopedViewModelStore("support") {
+                                if (showSupport) ModalOverlay(screen = "support_contact") { ScopedViewModelStore("support") {
                                     // Scoped, so closing the sheet CLEARS the
                                     // ViewModel. Activity-scoped, its `dismissed`
                                     // flag was never reset, so the second tap on
@@ -458,6 +460,18 @@ private fun PatientTabs(
     val showConsent by patientSettingsViewModel.showDataCollectionConsent.collectAsState()
     val settingsStateForConsent by patientSettingsViewModel.state.collectAsState()
     if (showConsent) {
+        // iOS: `.trackScreen("data_collection_consent")` on the sheet in
+        // PatientShell. Tracked here, at the presentation point, rather than
+        // inside the sheet — same rule as ModalOverlay (HARDENING.md H-10). It
+        // was missing entirely, which meant we could see how many caregivers
+        // answered the consent prompt but not how many were ever shown it
+        // (FINDINGS.md F-28). For a consent step under DPDP that gap is the
+        // difference between "declined" and "never asked".
+        //
+        // The label is a fixed string. The patient this consent is about is
+        // named on the sheet but never in the event.
+        val consentAnalytics = LocalAnalytics.current
+        LaunchedEffect(Unit) { consentAnalytics.logScreen("data_collection_consent") }
         ModalBottomSheet(
             // NOT onDecide(false). A swipe-away is the ABSENCE of an answer, and
             // recording "no" for someone who only dismissed the sheet is still
@@ -573,14 +587,14 @@ private fun PatientTabs(
     when (val open = destination) {
         PatientDestination.None -> Unit
 
-        PatientDestination.Feedback -> ModalOverlay {
+        PatientDestination.Feedback -> ModalOverlay(screen = "feedback") {
             FeedbackHost(
                 api = env.api,
                 onDismiss = { destination = PatientDestination.None },
             )
         }
 
-        is PatientDestination.Camera -> ModalOverlay {
+        is PatientDestination.Camera -> ModalOverlay(screen = "camera_detail") {
             CameraDetailHost(
                 api = env.api,
                 patientId = patientId,
@@ -589,7 +603,7 @@ private fun PatientTabs(
             )
         }
 
-        PatientDestination.AddSensor -> ModalOverlay {
+        PatientDestination.AddSensor -> ModalOverlay(screen = "add_camera") {
             AddCameraHost(
                 api = env.api,
                 patientId = patientId,
@@ -597,7 +611,7 @@ private fun PatientTabs(
             )
         }
 
-        PatientDestination.AddDetector -> ModalOverlay {
+        PatientDestination.AddDetector -> ModalOverlay(screen = "add_detector") {
             AddDetectorHost(
                 api = env.api,
                 patientId = patientId,
@@ -605,7 +619,7 @@ private fun PatientTabs(
             )
         }
 
-        PatientDestination.DetectorLibrary -> ModalOverlay {
+        PatientDestination.DetectorLibrary -> ModalOverlay(screen = "detector_library") {
             DetectorLibraryHost(
                 api = env.api,
                 patientId = patientId,
@@ -616,7 +630,7 @@ private fun PatientTabs(
             )
         }
 
-        is PatientDestination.EditDetector -> ModalOverlay {
+        is PatientDestination.EditDetector -> ModalOverlay(screen = "detector_detail") {
             DetectorDetailHost(
                 api = env.api,
                 patientId = patientId,
@@ -625,7 +639,7 @@ private fun PatientTabs(
             )
         }
 
-        PatientDestination.Enroll -> ModalOverlay {
+        PatientDestination.Enroll -> ModalOverlay(screen = "face_enrollment") {
             FaceEnrollmentHost(
                 api = env.api,
                 patientId = patientId,
@@ -644,7 +658,12 @@ private fun PatientTabs(
     // `closeEvent()` is what releases the events feed poll, which the ViewModel
     // pauses while a detail is up. Every exit from this stack goes through it.
     val event = openEvent
-    if (event != null) {
+    // key() on the event id so that swapping the presented event in place — a
+    // notification tap arriving while a detail is already open — is a NEW
+    // composition rather than a recomposition of the same one. Without it the
+    // overlay's screen tracking, which fires once per composition, would log the
+    // first event opened and then go quiet for the rest of the session.
+    if (event != null) key(event.id) {
         var reviewing by remember(event.id) { mutableStateOf(false) }
 
         if (reviewing) {
@@ -652,7 +671,7 @@ private fun PatientTabs(
             // Back returns to the detail, not out of the app. Typed notes
             // survive it, and survive a configuration change.
             BackHandler { reviewing = false }
-            ModalOverlay { EventReviewScreen(
+            ModalOverlay(screen = "event_review") { EventReviewScreen(
                 state = review,
                 onChoiceChange = { review = review.copy(choice = it) },
                 onNotesChange = { review = review.copy(notes = it) },
@@ -678,7 +697,7 @@ private fun PatientTabs(
             )
             val detailState by detailViewModel.state.collectAsState()
             BackHandler { eventsViewModel.closeEvent() }
-            ModalOverlay { EventDetailScreen(
+            ModalOverlay(screen = "event_detail") { EventDetailScreen(
                 state = detailState,
                 onBack = eventsViewModel::closeEvent,
                 onReviewEvent = { reviewing = true },

@@ -5,11 +5,12 @@ import androidx.compose.runtime.staticCompositionLocalOf
 /**
  * Analytics sink. Spec: PARITY.md §14 and Services/Analytics.swift.
  *
- * Phase 1 defines the seam only. The buffering, hourly flush, persistence and
- * batch upload are Phase 8; nothing here should grow those responsibilities
- * early.
+ * The buffering, hourly flush, disk persistence and batch upload live in
+ * [BufferedAnalytics], which is what the app provides. This stays an interface
+ * so tests can record events without a Supabase client and so the whole system
+ * can be replaced by [NoOpAnalytics] at one line.
  *
- * The seam exists now because `NemaraButton` and `NemaraToggle` call it from
+ * The seam exists because `NemaraButton` and `NemaraToggle` call it from
  * *inside* the component. That is the whole design: it is the single
  * instrumentation point for the app, so analytics coverage cannot rot as
  * screens are added, and a copy change cannot silently rename an event.
@@ -36,9 +37,25 @@ interface Analytics {
 
     /** An app-lifecycle transition: app_launch / app_foreground / app_background. */
     fun logLifecycle(name: String)
+
+    /**
+     * Write the buffer out and try to send it. Called when the app goes to the
+     * background, which on Android is the last callback a process is guaranteed
+     * before it can be killed outright.
+     *
+     * Default no-op, because a sink that does not buffer has nothing to do here
+     * and should not have to say so.
+     */
+    fun persistAndFlush() = Unit
 }
 
-/** Default sink. Discards everything; the real one is wired in Phase 8. */
+/**
+ * Sink that discards everything.
+ *
+ * Still the default for [LocalAnalytics] so a component rendered in isolation —
+ * a preview, a screen test that does not care — logs into nothing instead of
+ * needing a provider. The app itself provides [BufferedAnalytics].
+ */
 object NoOpAnalytics : Analytics {
     override fun logButton(name: String) = Unit
     override fun logToggle(name: String, isOn: Boolean) = Unit

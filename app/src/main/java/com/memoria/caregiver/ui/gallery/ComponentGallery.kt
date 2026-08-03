@@ -209,6 +209,12 @@ private fun Buttons() {
                     title = variant.name,
                     variant = variant,
                     size = size,
+                    // The title here is a variant name rather than copy, so it
+                    // gets an explicit label: `logButton` falls back to the
+                    // title, and every analytics label in this app is a fixed
+                    // string written by hand. AnalyticsLabelsAreFixedStringsTest
+                    // enforces that.
+                    track = "gallery.variant_button",
                     onClick = {},
                 )
             }

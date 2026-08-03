@@ -1,6 +1,13 @@
 package com.memoria.caregiver
 
 import android.content.Context
+import android.os.Build
+import com.memoria.caregiver.analytics.Analytics
+import com.memoria.caregiver.analytics.BufferedAnalytics
+import com.memoria.caregiver.analytics.DeviceContext
+import com.memoria.caregiver.analytics.FileAnalyticsStore
+import com.memoria.caregiver.analytics.InMemoryAnalyticsStore
+import com.memoria.caregiver.analytics.SupabaseAnalyticsUploader
 import com.memoria.caregiver.data.AppConfig
 import com.memoria.caregiver.data.auth.SupabaseAuthService
 import com.memoria.caregiver.data.remote.ApiError
@@ -15,6 +22,7 @@ import com.memoria.caregiver.ui.live.PeopleBlurStore
 import com.memoria.caregiver.ui.nav.DeepLinkRouter
 import io.github.jan.supabase.auth.Auth
 import io.github.jan.supabase.createSupabaseClient
+import io.github.jan.supabase.postgrest.Postgrest
 import io.github.jan.supabase.realtime.Realtime
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
@@ -74,9 +82,43 @@ class AppEnvironment(
     ) {
         install(Auth)
         install(Realtime)
+        // Analytics rows go straight into `ui_events` with the caregiver's own
+        // session — there is no backend endpoint for them, because the table's
+        // row-level-security policy already scopes every insert to the caller.
+        install(Postgrest)
     }
 
     val auth = SupabaseAuthService(client = supabase, scope = scope)
+
+    /**
+     * UI analytics. Port of `Analytics.shared`, which iOS configures from
+     * `AppEnvironment.live()` for the same reason it is built here: it needs the
+     * Supabase client and a way to read the current caregiver, and nothing else
+     * in the app should have to thread either of those to a button.
+     *
+     * `caregivers.id` is the Supabase auth user id, so reading it here is
+     * exactly the `auth.uid()` the `ui_events` policy checks against.
+     *
+     * [BufferedAnalytics.start] loads whatever a previous run left on disk and
+     * begins the hourly worker. Called here, at construction, so a buffer that
+     * survived a process kill goes out at launch instead of an hour later.
+     */
+    val analytics: Analytics = BufferedAnalytics(
+        scope = scope,
+        // No Context means no private files directory — previews and any test
+        // that builds the environment. Keeping the buffer in memory there is
+        // better than making the whole environment unconstructible for it.
+        store = appContext
+            ?.let { FileAnalyticsStore(java.io.File(it.filesDir, ANALYTICS_BUFFER_FILE)) }
+            ?: InMemoryAnalyticsStore(),
+        uploader = SupabaseAnalyticsUploader(supabase),
+        caregiverId = { auth.currentCaregiver.value?.id },
+        device = DeviceContext(
+            appBuild = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+            osVersion = Build.VERSION.RELEASE,
+            deviceModel = Build.MODEL,
+        ),
+    ).also { it.start() }
 
     /**
      * Shared between the API client and the Realtime store, because the three
@@ -216,5 +258,12 @@ class AppEnvironment(
 
         /** iOS keys the same preference off `UserDefaults` directly. */
         const val PEOPLE_BLUR_PREFS = "com.memoria.caregiver.peopleblur"
+
+        /**
+         * Same file name iOS uses, in the app's private files directory. It
+         * holds buffered interaction events between runs and nothing else — no
+         * patient data ever reaches it.
+         */
+        const val ANALYTICS_BUFFER_FILE = "ui_events_buffer.json"
     }
 }

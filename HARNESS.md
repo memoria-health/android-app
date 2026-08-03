@@ -304,6 +304,35 @@ never happened; here the device measured a binary that was not the one built.
 
 ---
 
+## 4f. Check the provenance of device evidence, not just its shape
+
+Added 2026-08-03, after the second near-miss of the same class in one session.
+
+Verifying analytics, I queried `ui_events`, saw twelve rows with exactly the
+right screen taxonomy, and was one sentence from reporting "analytics works end
+to end". **Every row was iOS's** — `device_model = arm64`, `os_version = 17.2.0`
+is the simulator from the parity capture run. Android had written nothing,
+because I had backgrounded the app with `am force-stop`, which kills the process
+without lifecycle callbacks, so `onStop` and its `persistAndFlush` never ran.
+
+The rows looked exactly like success. They were someone else's success.
+
+**Two rules:**
+
+1. **Attribute before concluding.** Any shared sink — a database table, a log, a
+   device — needs a column that says who wrote the row. Here `device_model`
+   settled it in one query; without it the mistake ships.
+2. **`am force-stop` is not "backgrounding".** It skips every lifecycle callback.
+   Use `input keyevent KEYCODE_HOME` to exercise `onStop`, and reserve
+   `force-stop` for testing cold start.
+
+This is the same shape as §4d and §4e: **the measurement was real and measured
+the wrong thing.** A mutation run that never ran; a device running the wrong
+binary; a table holding another platform's rows. Whenever a result looks right,
+the next question is what produced it.
+
+---
+
 ## 5. Escalation — exactly what stops the machine
 
 Aryaman's standing instruction is to surface design choices before implementing.

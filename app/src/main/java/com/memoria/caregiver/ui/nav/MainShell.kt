@@ -12,6 +12,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.rememberCoroutineScope
@@ -118,14 +119,10 @@ fun MainShell(
                 MainTab.entries.forEach { entry ->
                     NavigationBarItem(
                         selected = tab == entry,
-                        onClick = {
-                            tab = entry
-                            // iOS tracks the tab as a screen; the tracking lives
-                            // here rather than inside each screen so a tab added
-                            // without the call cannot go silently uninstrumented
-                            // (HARDENING.md H-10).
-                            analytics.logScreen(entry.analyticsName)
-                        },
+                        // Selection only. The screen event fires where the tab's
+                        // content is drawn, not here — see the LaunchedEffect
+                        // below.
+                        onClick = { tab = entry },
                         // Icon AND label, as iOS's `Label(title, systemImage:)`
                         // renders. It was text-only in the icon slot (F-13).
                         icon = {
@@ -156,6 +153,16 @@ fun MainShell(
             }
         },
     ) { insets ->
+        // iOS's `.trackScreen()` is an `onAppear`, so it fires for whatever tab
+        // is showing — including the one the session starts on, and any tab the
+        // app selects for itself. Logging from the tab bar's onClick instead
+        // meant neither was ever recorded: every session appeared to begin
+        // nowhere, and Home was undercounted by exactly the sessions that never
+        // left it. Firing here, where the content is drawn, is the port of
+        // onAppear and is also the only instrumentation point for these two
+        // screens, so a tab added to the enum cannot go untracked
+        // (HARDENING.md H-10).
+        LaunchedEffect(tab) { analytics.logScreen(tab.analyticsName) }
         Box(Modifier.padding(insets).fillMaxSize()) {
             when (tab) {
                 MainTab.HOME -> {

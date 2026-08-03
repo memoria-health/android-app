@@ -240,7 +240,12 @@ class EventReviewScreenTest {
         compose.onNodeWithTag(reviewChoiceTestTag(DetectionEvent.ReviewChoice.WRONG))
             .performScrollTo().performClick()
 
-        assertEquals(listOf("event_review"), analytics.names("screen"))
+        // Screen tracking moved to the presenter, where iOS puts it:
+        // `ModalOverlay(screen = "event_review")` logs it when this is presented,
+        // so a new overlay cannot ship untracked (HARDENING.md H-10).
+        // ModalOverlayTest pins the presenter's behaviour and
+        // ScreenTrackingCoverageTest pins the name.
+        assertEquals(emptyList<String>(), analytics.names("screen"))
     }
 
     /**

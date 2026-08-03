@@ -157,16 +157,16 @@ class EventDetailScreenTest {
 
     /**
      * iOS attaches `.trackScreen("event_detail")` where this screen is
-     * presented. The name is the analytics contract and outlives the copy.
+     * presented, and so does Android now:
+     * `ModalOverlay(screen = "event_detail")` owns it, so a screen added without
+     * the line cannot exist (HARDENING.md H-10). ModalOverlayTest pins the
+     * presenter's behaviour, including that a swapped event logs again, and
+     * ScreenTrackingCoverageTest pins the name.
      */
     @Test
-    fun `opening the detail logs the screen`() {
+    fun `the screen does not log itself — its presenter does`() {
         setUp(EventDetailState(event = sampleEvent()))
-        assertTrue(
-            analytics.entries.any {
-                it.type == "screen" && it.name == "event_detail"
-            },
-        )
+        assertTrue(analytics.names("screen").isEmpty())
     }
 }
 

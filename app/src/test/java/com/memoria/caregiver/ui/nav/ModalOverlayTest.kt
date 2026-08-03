@@ -4,7 +4,13 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Text
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import com.memoria.caregiver.analytics.LocalAnalytics
+import com.memoria.caregiver.analytics.RecordingAnalytics
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -47,7 +53,7 @@ class ModalOverlayTest {
                             .fillMaxSize()
                             .clickable { behindTaps++ },
                     )
-                    ModalOverlay { Text("the form") }
+                    ModalOverlay(screen = "test_screen") { Text("the form") }
                 }
             }
         }
@@ -66,7 +72,7 @@ class ModalOverlayTest {
         var contentTaps = 0
         compose.setContent {
             MemoriaTheme {
-                ModalOverlay {
+                ModalOverlay(screen = "test_screen") {
                     Text("Close", modifier = Modifier.clickable { contentTaps++ })
                 }
             }
@@ -79,8 +85,46 @@ class ModalOverlayTest {
 
     @Test
     fun `the content is what is shown`() {
-        compose.setContent { MemoriaTheme { ModalOverlay { Text("the form") } } }
+        compose.setContent {
+            MemoriaTheme { ModalOverlay(screen = "test_screen") { Text("the form") } }
+        }
 
         compose.onNodeWithText("the form").assertIsDisplayed()
+    }
+
+    @Test
+    fun `presenting an overlay logs its screen, once`() {
+        // The structural half of HARDENING.md H-10: `screen` is a required
+        // parameter on the one composable every full-surface overlay goes
+        // through, so a screen added to the app cannot ship untracked.
+        val analytics = RecordingAnalytics()
+        compose.setContent {
+            CompositionLocalProvider(LocalAnalytics provides analytics) {
+                MemoriaTheme { ModalOverlay(screen = "camera_detail") { Text("the form") } }
+            }
+        }
+        compose.waitForIdle()
+
+        assertEquals(listOf("camera_detail"), analytics.names("screen"))
+    }
+
+    @Test
+    fun `presenting a different screen at the same call site logs again`() {
+        // The patient stack reuses one call site for six destinations, and the
+        // event stack swaps the event under an open detail. Keying the effect on
+        // the name rather than on Unit is what stops the second one going
+        // unrecorded.
+        val analytics = RecordingAnalytics()
+        var screen by mutableStateOf("event_detail")
+        compose.setContent {
+            CompositionLocalProvider(LocalAnalytics provides analytics) {
+                MemoriaTheme { ModalOverlay(screen = screen) { Text("the form") } }
+            }
+        }
+        compose.waitForIdle()
+        screen = "event_review"
+        compose.waitForIdle()
+
+        assertEquals(listOf("event_detail", "event_review"), analytics.names("screen"))
     }
 }

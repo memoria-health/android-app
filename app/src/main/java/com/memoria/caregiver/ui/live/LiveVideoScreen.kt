@@ -852,6 +852,11 @@ private fun BulkMonitoringLever(
     val lever = bulkMonitoringButton(onlineCount)
     NemaraButton(
         title = lever.title,
+        // The title is built at runtime, so it gets an explicit label:
+        // `logButton` falls back to the title, and every analytics label in
+        // this app is a fixed string. A dynamic one would also split one
+        // button into several events in the funnel.
+        track = "live.lever",
         variant = if (lever.isPrimary) {
             NemaraButtonVariant.Primary
         } else {

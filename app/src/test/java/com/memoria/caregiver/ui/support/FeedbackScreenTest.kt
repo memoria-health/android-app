@@ -256,7 +256,12 @@ class FeedbackScreenTest {
         setUp(filled, analytics = analytics)
         compose.waitForIdle()
 
-        assertEquals(listOf("feedback"), analytics.names("screen"))
+        // Screen tracking moved to the presenter, where iOS puts it:
+        // `ModalOverlay(screen = "feedback")` logs it when this is presented,
+        // so a new overlay cannot ship untracked (HARDENING.md H-10).
+        // ModalOverlayTest pins the presenter's behaviour and
+        // ScreenTrackingCoverageTest pins the name.
+        assertEquals(emptyList<String>(), analytics.names("screen"))
     }
 
     /**

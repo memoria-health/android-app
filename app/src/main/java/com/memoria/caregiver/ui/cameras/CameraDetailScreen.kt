@@ -24,7 +24,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -40,7 +39,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.memoria.caregiver.analytics.LocalAnalytics
 import com.memoria.caregiver.data.model.Camera
 import com.memoria.caregiver.data.model.Detector
 import com.memoria.caregiver.ui.components.NemaraButton
@@ -112,8 +110,10 @@ fun CameraDetailScreen(
     onShowPairingCode: () -> Unit,
     onOpenDoorPicker: () -> Unit,
 ) {
-    val analytics = LocalAnalytics.current
-    LaunchedEffect(Unit) { analytics.logScreen("camera_detail") }
+    // Screen tracking is NOT here. `ModalOverlay(screen = "camera_detail")` logs it at
+    // the point this is presented, the way iOS's `.trackScreen()` does, so a
+    // screen cannot ship untracked and no view is counted twice. See
+    // ModalOverlay and HARDENING.md H-10.
 
     var showAdvanced by remember { mutableStateOf(false) }
     var confirming by remember { mutableStateOf<Confirmation?>(null) }
