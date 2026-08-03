@@ -4,7 +4,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -15,6 +17,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -105,6 +108,9 @@ fun PatientHeader(
                     // 12 here plus the Row's own 12 gives the 24dp gap iOS
                     // leaves, so Feedback and Home cannot be hit together.
                     .padding(end = 12.dp)
+                    // Same reasoning as Home: the pill draws at iOS's ~30dp but
+                    // must not be a sub-44dp target.
+                    .defaultMinSize(minHeight = 44.dp)
                     .background(PaperDim, CircleShape)
                     .border(1.dp, Line, CircleShape)
                     .clickable(onClick = onFeedback)
@@ -124,13 +130,28 @@ fun PatientHeader(
             }
         }
 
-        Icon(
-            imageVector = HomeHouse,
-            contentDescription = "Home",
-            tint = Ink,
+        // The glyph is 18dp to match iOS, but the TARGET is 44dp.
+        //
+        // `Modifier.clickable` on a bare Icon gets no minimum-size expansion, so
+        // this was an 18x18dp hit rect — and it is the only way out of the
+        // patient bundle, because the design deliberately has no back chevron.
+        // iOS's `Button { Image(...) }` gets UIKit's 44pt minimum for free.
+        // 44dp rather than Android's 48dp guideline so the header keeps iOS's
+        // height; the guideline's purpose is served either way.
+        Box(
             modifier = Modifier
-                .size(18.dp)
-                .clickable(onClick = onHome),
-        )
+                .size(44.dp)
+                .clip(CircleShape)
+                .clickable(onClick = onHome)
+                .semantics { contentDescription = "Home" },
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = HomeHouse,
+                contentDescription = null,
+                tint = Ink,
+                modifier = Modifier.size(18.dp),
+            )
+        }
     }
 }

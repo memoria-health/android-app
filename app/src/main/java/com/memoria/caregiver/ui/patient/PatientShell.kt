@@ -64,6 +64,14 @@ fun PatientShell(
      * leaves the patient — never on a sub-tab switch.
      */
     onLeavePatient: () -> Unit,
+    /**
+     * True when the deep-link router is pointing at an event in THIS patient.
+     * Steers the shell to the Events tab.
+     *
+     * Passed as a resolved boolean rather than the router, so the shell stays a
+     * pure function of what it is told and can be exercised without one.
+     */
+    hasFocusedEvent: Boolean = false,
     modifier: Modifier = Modifier,
     liveContent: @Composable () -> Unit,
     camerasContent: @Composable () -> Unit,
@@ -77,6 +85,19 @@ fun PatientShell(
     // whole shell leaves composition. See the class comment.
     DisposableEffect(Unit) {
         onDispose { onLeavePatient() }
+    }
+
+    // A notification tap opens the patient AND names an event, so the shell must
+    // land on Events rather than on Live. iOS does this with
+    // `.onChange(of: focusEventId, initial: true)`; `initial = true` is the cold
+    // launch, where the id is already set by the time the shell first appears —
+    // which is why this is a LaunchedEffect that also runs on first composition
+    // rather than only on change.
+    //
+    // It steers and nothing more. The events screen is what consumes the id and
+    // clears it, so this must not read it as "handled".
+    LaunchedEffect(hasFocusedEvent) {
+        if (hasFocusedEvent) tab = PatientTab.EVENTS
     }
 
     Scaffold(

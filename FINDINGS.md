@@ -128,12 +128,26 @@ clear was elvis-chained behind an unguarded suspend call, so it ran only when
 there was no Realtime store, i.e. never), I-4 (leaving a patient reset the main
 tab bar to Home because `rememberSaveable` sat below the early return).
 
-**Still open from this review:** I-2 (per-patient ViewModels are never cleared —
-N stale copies each answer the next notification tap with their own authenticated
-fetch), I-5 (`PatientShell` drops the notification-steers-to-Events behaviour and
-the first-open data-collection consent sheet), I-6 (the Home button is an 18dp
-touch target and is the only exit from the patient bundle), I-7 (the cache tests
-aim away from the class of effect D15 says the split endangers), and M-1..M-7.
+**Fixed 2026-08-02, after the Criticals:**
+
+- **I-2** — per-patient ViewModels now live in a `ViewModelStore` scoped to the
+  open patient (`ui/patient/PatientViewModelScope.kt`) and are cleared on leave.
+  Previously the nearest owner was the Activity, so they accumulated for the
+  session and **every surviving `EventsListViewModel` answered the next
+  notification tap with its own authenticated `GET /v1/events/{id}`** for a
+  patient the caregiver was not looking at.
+- **I-5a** — a notification tap now steers the shell to Events. `PatientShell`
+  takes a resolved `hasFocusedEvent` (guarded on the router pointing at *this*
+  patient) and switches tab, without consuming the id — the events screen still
+  owns clearing it.
+- **I-6** — the Home button's target is 44dp with the glyph still 18dp, and the
+  Feedback pill has a 44dp minimum height. It was an 18x18dp hit rect and is the
+  **only** exit from the patient bundle, since the design has no back chevron.
+  iOS's `Button { Image(...) }` gets UIKit's 44pt minimum for free.
+
+**Still open:** I-5b (the data-collection consent sheet composable itself),
+I-7 (the cache tests aim away from the class of effect D15 says the split
+endangers), and M-1..M-7.
 
 ---
 

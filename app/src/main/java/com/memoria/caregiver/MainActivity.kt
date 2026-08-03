@@ -36,6 +36,7 @@ import com.memoria.caregiver.ui.cameras.CameraListViewModel
 import com.memoria.caregiver.ui.detectors.PatientDetectorsScreen
 import com.memoria.caregiver.ui.detectors.PatientDetectorsViewModel
 import com.memoria.caregiver.ui.patient.PatientShell
+import com.memoria.caregiver.ui.patient.PatientViewModelScope
 import com.memoria.caregiver.ui.settings.PatientSettingsScreen
 import com.memoria.caregiver.ui.settings.PatientSettingsViewModel
 import androidx.compose.runtime.LaunchedEffect
@@ -159,6 +160,26 @@ private fun PatientRoute(
         return
     }
 
+    PatientViewModelScope(patientId) {
+        PatientTabs(env, patient, patientId, resolvePhotoUrl, onHome)
+    }
+}
+
+/**
+ * The five tabs and their ViewModels, inside the patient's own ViewModel store.
+ *
+ * Split out from [PatientRoute] only so `PatientViewModelScope` can provide the
+ * store owner ABOVE every `viewModel(...)` call — a CompositionLocal only
+ * reaches composables nested inside the provider.
+ */
+@androidx.compose.runtime.Composable
+private fun PatientTabs(
+    env: AppEnvironment,
+    patient: com.memoria.caregiver.data.model.Patient,
+    patientId: String,
+    resolvePhotoUrl: suspend (String) -> String?,
+    onHome: () -> Unit,
+) {
     val eventsViewModel: EventsListViewModel = viewModel(
         // Keyed on the patient, so switching patients does not carry the
         // previous one's feed, open event or poll across.
@@ -169,6 +190,7 @@ private fun PatientRoute(
     )
 
     val openEvent by eventsViewModel.openEvent.collectAsState()
+    val link by env.deepLink.state.collectAsState()
 
     val camerasViewModel: CameraListViewModel = viewModel(
         key = "cameras:$patientId",
@@ -211,6 +233,10 @@ private fun PatientRoute(
         // PatientShell already keys its DisposableEffect that way. When the
         // client lands, the disconnect goes here and nowhere else.
         onLeavePatient = { /* TODO(live-tab): env.liveKit.disconnect() */ },
+        // Only when the router names an event for THIS patient. Without the
+        // patient check, a stale focus id from another household would drag
+        // this shell onto Events for no reason.
+        hasFocusedEvent = link.openPatientId == patientId && link.focusEventId != null,
         liveContent = { TabStub("Live") },
         camerasContent = {
             val cameraState by camerasViewModel.state.collectAsState()
