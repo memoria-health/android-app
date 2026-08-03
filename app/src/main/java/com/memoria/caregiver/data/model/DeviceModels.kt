@@ -1023,6 +1023,24 @@ data class UpdateDetectorRequest(
 )
 
 /**
+ * Body of `POST /v1/detectors/{id}/refine` — one plain-words change request
+ * ("don't count eating as choking"). The backend appends it to the detector's
+ * accumulated list and recompiles the instructions from all of them.
+ *
+ * [preview] is a dry run: the backend compiles WITH this feedback and returns
+ * the resulting criteria without persisting anything, which is what the
+ * "Re-generate" button uses. Both fields are always written — iOS declares them
+ * as non-optional on an inline `Encodable`, so both appear on the wire even
+ * when `preview` is false, and the backend's `extra="forbid"` means the shape
+ * has to match exactly.
+ */
+@Serializable
+data class RefineDetectorRequest(
+    val feedback: String,
+    val preview: Boolean,
+)
+
+/**
  * One detector-catalog entry from `GET /v1/patients/{id}/detectors/library`,
  * the detection library. Mirrors
  * `nemara-backend/src/schemas/detector.py` `DetectorLibraryEntry`.

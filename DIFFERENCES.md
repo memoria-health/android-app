@@ -256,5 +256,35 @@ is unproven without REQ-2 and a physical device.
 
 ---
 
+## D15 — The API client's HTTP calls are grouped into six files; the cache is not split
+**Category:** file organisation
+**iOS:** `NemaraAPIClient.swift` is one 1528-line type holding the URLSession, the
+observable cache, the Supabase channels and the poll together. Its own comment
+says an earlier project split this into repository + store and ended up with two
+sources of truth that drifted.
+
+**Android:** the *cache* stays exactly as iOS has it — one `NemaraApiClient`
+owning one set of `StateFlow`s and implementing `RealtimeCache`. What is split
+out is the HTTP: six `internal class XxxApi(http: HttpTransport)` files
+(patients, cameras, detectors, events, LiveKit, enrollment) holding **no state at
+all**.
+
+**Why this is not the split `PARITY.md` §10 forbids:** the scar §10 records is
+two places that both *remember* things. A group with no fields cannot be a
+second source of truth — it is a bundle of call sites. Every cached collection,
+every sort order and every live-state side effect stays in the one client.
+
+**What it bought:** six units could be built at once instead of one 1800-line
+file being written serially, and each group's wire format is testable in
+isolation against a mock engine.
+
+**The risk it carries, stated plainly:** a group that returns a value and the
+client that stores it are now two places, so a cache side effect can be dropped
+in between. That is guarded by each group naming, in a comment, the exact side
+effect its caller still owes — `live.markEverOnline` after `loadCameras` and
+`live.beginReconnectWindow` after `updateCamera` are the two that matter.
+
+---
+
 _(Add entries as they arise. Cosmetic gaps found in the Phase 8 screenshot pass
 go here too, each with a reason or a fix.)_

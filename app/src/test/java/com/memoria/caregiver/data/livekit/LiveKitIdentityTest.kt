@@ -77,10 +77,15 @@ class LiveKitIdentityTest {
     }
 
     /**
-     * Lowercasing is locale-sensitive in Kotlin unless a locale is named. Hex
-     * UUIDs contain no `I`, so the Turkish dotless-i mapping cannot bite a
-     * well-formed id today — this pins the guarantee for anything that is not
-     * one, rather than relying on the caller's device locale.
+     * Pins that the identity does not change with the device locale.
+     *
+     * Kotlin's no-argument `lowercase()` already lowers with `Locale.ROOT` —
+     * that is why it replaced `toLowerCase()`, which used the device locale and
+     * did map `I` to a dotless `ı` on a Turkish device. So this test guards a
+     * guarantee the stdlib gives rather than one this code adds. It is here
+     * because the two spellings differ by nothing visible at a call site, and
+     * this is the one string where a silent change evicts a caregiver's iPhone
+     * from the live stream.
      */
     @Test
     fun `lowercasing does not depend on the device locale`() {

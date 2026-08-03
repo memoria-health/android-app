@@ -146,6 +146,36 @@ the largest single piece of work remaining.
 
 ---
 
+### F-11 — The API client implements 2 endpoints out of ~26; F-10 understated the gap
+**All phases · Critical · verified 2026-08-02**
+
+`NemaraApiClient` has five methods against `/v1/me` and `/v1/support`. The iOS
+`NemaraAPIClient.swift` is **1528 lines with ~60 public methods** across eight
+resource families. Missing entirely:
+
+| Family | iOS methods | Android |
+|---|---|---|
+| patients (incl. photo upload/URL/delete, test email) | 8 | 0 |
+| cameras (pairing, discovery, provisioning, wandering doors) | 13 | 0 |
+| detectors (infer, refine, library) | 9 | 0 |
+| events (paging, clip URL, review) | 5 | 0 |
+| LiveKit (tokens, talk start/end, clip record) | 6 | 0 |
+| face embeddings | 4 | 0 |
+| device tokens, feedback | 3 | 0 |
+| lifecycle (bootstrap / refresh / teardown / resync) | 6 | 0 |
+
+**This is why F-10 is not merely a wiring job.** A ViewModel cannot be written
+against endpoints that do not exist, so the missing API layer sits underneath
+every screen that is unreachable. `RealtimeStore`, `CameraStatePoller` and the
+four channel handlers are all built and tested against `RealtimeCache` — an
+interface `NemaraApiClient` is documented to implement and does not.
+
+The contract is already written and does not need designing: `RealtimePorts.kt`
+specifies the cache shape, the sort orders and the single-threaded confinement,
+and `PARITY.md` §10 forbids splitting it into repository + store.
+
+---
+
 ## RESOLVED
 
 ### F-7 — The render watchdog has no `DIFFERENCES.md` entry

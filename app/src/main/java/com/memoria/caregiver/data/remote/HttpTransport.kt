@@ -13,6 +13,7 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.contentType
+import io.ktor.http.content.OutgoingContent
 import io.ktor.http.isSuccess
 import io.ktor.http.path
 import io.ktor.utils.io.errors.IOException
@@ -103,7 +104,21 @@ class HttpTransport(
             accept(ContentType.Application.Json)
             tokenProvider()?.let { header(HttpHeaders.Authorization, "Bearer $it") }
             if (body != null) {
-                contentType(ContentType.Application.Json)
+                // Only a value we are asking Ktor to serialise gets the JSON
+                // content type. An OutgoingContent — a multipart photo or a
+                // batch of enrollment frames — carries its own type, and its
+                // boundary parameter is generated, so declaring JSON here would
+                // be describing the body wrongly.
+                //
+                // It worked before this line existed, but only by accident:
+                // Ktor's header merge happens to prefer `content.contentType`
+                // over a request header, so the multipart type won. That is an
+                // implementation detail of the engine, invisible at this call
+                // site, and it would have failed silently as a 422 the day it
+                // changed. Two separate uploads depend on it.
+                if (body !is OutgoingContent) {
+                    contentType(ContentType.Application.Json)
+                }
                 setBody(body)
             }
         }

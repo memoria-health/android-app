@@ -187,6 +187,7 @@ dependencies {
     // silently shipping a baseline lavender.
     testImplementation(libs.kotlin.reflect)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.ktor.client.mock)
 
     // Manifest-only artifact supplying the ComponentActivity that
     // createComposeRule() hosts the composition in. Debug only — see above.
