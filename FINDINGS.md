@@ -228,7 +228,36 @@ REQ-22 should be read as "wired, server side proven, client side unproven".
 ---
 
 ### F-28 — Analytics is discarded, and the coverage gate has the hole it was built to close
-**Phase 8 · Important · OPEN**
+**Phase 8 · Important · FIXED 2026-08-03**
+
+**Fixed.** `Services/Analytics.swift` is ported as `analytics/BufferedAnalytics.kt`
+plus `UiEvent`, `AnalyticsStore`, `AnalyticsUploader` and `AnalyticsConfig`:
+buffering, persist-every-25, hourly flush, batch-of-200 upsert into `ui_events`,
+caregiver-id stamping, the RLS-shaped "only the signed-in caregiver's rows are
+sent" filter, and the one-line `AnalyticsConfig.ENABLED` kill switch.
+`MainActivity` provides it in place of `NoOpAnalytics`, so all 16 production call
+sites now reach a real buffer. `logLifecycle` has callers:
+`MemoriaApplication.ForegroundObserver` fires `app_launch` on the first
+foreground, `app_foreground` on every one, and `app_background` +
+`persistAndFlush()` on the way out.
+
+Two things about the port worth knowing:
+
+- **`app_launch` is logged from the first `onStart`, not from
+  `Application.onCreate`.** iOS logs it in `init`, but reading `environment`
+  inside `onCreate` builds the Supabase and HTTP clients there — which takes
+  every Robolectric test in the module down with it, because Robolectric calls
+  `onCreate` for each one. Both events are still logged in iOS's order,
+  milliseconds apart.
+- **The thread-safety story is different from iOS and had to be.** iOS gets it
+  from `@MainActor`; here one monitor guards the buffer and **no critical
+  section contains a suspension point**. The flush copies out under the lock,
+  uploads with the lock released, and writes back by *removing the ids
+  confirmed sent* — never by assignment, which is the F-12 shape.
+
+**The screen-tracking half is fixed too** — see HARDENING.md H-10.
+
+**Original entry, for the record:**
 
 `MainActivity` provides `NoOpAnalytics`. There is no counterpart to
 `Services/Analytics.swift` (295 lines: buffering, disk persistence, hourly
@@ -281,8 +310,20 @@ Three deltas:
    fix in the avatar.** Recording it because "iOS shows no letter" was a
    plausible-looking parity bug that would have cost someone a day.
 
-Six screens are captured and not yet compared: welcome, login, app settings,
-patient live, patient events, patient sensors.
+**App settings — clean.** Same structure top to bottom: account card, YOUR
+PATIENTS eyebrow, Margaret Doyle with relation, "+ Add another patient", ACCOUNT
+eyebrow, the five rows in order with the same glyph containers, `MEMORIA v0.1`,
+and the tab bar now matching after the Terra fix. One delta, consistent with the
+two already logged: iOS's `gearshape` reads heavier than my hand-drawn ring.
+
+**The glyph deltas are one finding, not three.** Detectors' emitter dot, Events'
+waveform and Settings' gear are all the same mistake — I simplified each SF
+Symbol to what I judged "the readable core" and, seen beside the originals, each
+lost the feature that makes it legible at 24dp. Worth fixing as a set rather than
+one at a time.
+
+Five screens captured and not yet compared: welcome, login, patient live, patient
+events, patient sensors.
 
 ---
 
@@ -1112,3 +1153,42 @@ conclusion, which is what made the retraction cheap and unambiguous.
 
 ---
 
+### F-37 — The analytics buffer outlives a sign-out, on both platforms
+**Phase 8 · Important · OPEN · affects iOS too**
+
+Ported faithfully from `Services/Analytics.swift`, and worth flagging rather than
+silently diverging from.
+
+`flush()` sends only the events stamped with the caregiver who is signed in right
+now — anything else stays buffered, which is correct, because row-level security
+would reject it. But "stays buffered" means: **caregiver A's interaction trail
+remains in memory and in `ui_events_buffer.json` after A signs out, through B's
+whole session, until the 5,000-event cap eventually pushes it out.** It is never
+uploaded under B's identity. It is still A's behavioural record sitting in a file
+on a device B is now using.
+
+`AppEnvironment.onWillSignOut` already treats sign-out as a privacy boundary and
+clears the API cache there, with the comment "a care team sharing one device is
+the normal case". That is precisely the situation here, and the analytics buffer
+is the one thing that does not participate.
+
+Also in scope: events logged **before** any sign-in carry `caregiver_id = null`,
+can never be sent (the column is `not null`), and are therefore immortal until
+the cap evicts them. The signed-out funnel — Welcome, Login, Sign up — is
+consequently invisible on both platforms, which is a product gap as much as a
+privacy one, because it is the top of the acquisition funnel.
+
+**Not fixed here** because it is a behaviour change to a shipped iOS contract,
+not an Android port defect, and the two options pull in different directions:
+
+- **Drop non-current-caregiver events on sign-out.** Simple, matches the existing
+  cache-clear boundary, loses the signed-out funnel entirely.
+- **Keep them and give the backend a way to accept unattributed rows** (a
+  nullable `caregiver_id` plus an anonymous-insert policy, or a device-scoped
+  session id). Recovers the funnel; needs a schema and RLS change, and under DPDP
+  an anonymous-insert path wants counsel's eyes before it ships.
+
+**Failure guarded:** one caregiver's activity trail persisting on a device handed
+to another, and a top-of-funnel we cannot see on either platform.
+
+---
