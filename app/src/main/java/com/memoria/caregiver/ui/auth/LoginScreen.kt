@@ -23,6 +23,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.autofill.ContentType
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
@@ -30,6 +31,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.Dp
@@ -41,6 +45,7 @@ import com.memoria.caregiver.ui.components.NemaraButtonSize
 import com.memoria.caregiver.ui.components.NemaraButtonVariant
 import com.memoria.caregiver.ui.components.NemaraField
 import com.memoria.caregiver.ui.components.NemaraMark
+import com.memoria.caregiver.ui.components.plainToggleable
 import com.memoria.caregiver.ui.theme.Action
 import com.memoria.caregiver.ui.theme.ActionInk
 import com.memoria.caregiver.ui.theme.Ink
@@ -129,6 +134,10 @@ fun LoginScreen(
                     onValueChange = onPasswordChange,
                     placeholder = "Enter your password",
                     isSecure = !state.showPassword,
+                    // Stated rather than derived: `isSecure` follows the reveal
+                    // toggle, and a revealed password is still the password a
+                    // manager should fill.
+                    contentType = ContentType.Password,
                     // iOS renders the secure state with SecureField, which is a
                     // UITextField with isSecureTextEntry — UIKit forces
                     // autocapitalization off there. Held constant across the
@@ -224,7 +233,11 @@ private fun KeepSignedInCheckbox(
 ) {
     val shape = RoundedCornerShape(5.dp)
     Row(
-        modifier = Modifier.plainClickable(onToggle),
+        // A checkbox, and it announces as one: "Keep me signed in, checkbox,
+        // checked". As a button it would name the option and never say whether
+        // it is on, which for a sign-in preference is the only thing worth
+        // knowing.
+        modifier = Modifier.plainToggleable(checked = isChecked, onToggle = onToggle),
         horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -261,7 +274,10 @@ private fun BackChevronButton(onBack: () -> Unit) {
             .padding(start = 2.dp)
             .size(44.dp)
             .testTag(LoginBackTestTag)
-            .plainClickable(onBack),
+            .plainClickable(onBack)
+            // Drawn, so there is no SF Symbol name for a screen reader to fall
+            // back on the way iOS has for `chevron.left`.
+            .semantics { contentDescription = "Back" },
         contentAlignment = Alignment.Center,
     ) {
         ChevronLeftGlyph(size = 18.dp, color = Ink)
@@ -281,6 +297,14 @@ private fun Modifier.plainClickable(onClick: () -> Unit): Modifier {
     return this.clickable(
         interactionSource = interactionSource,
         indication = null,
+        // Every one of these is a SwiftUI `Button` on iOS, and a button tells a
+        // screen reader that it is a button. Without a role TalkBack reads the
+        // label as ordinary text: the caregiver hears the words and is never
+        // told they can be tapped. Set inside the helper rather than at each
+        // call site so a new caller cannot be added without it. Controls that
+        // are a CHOICE rather than an action use `plainSelectable` or
+        // `plainToggleable`, which carry the role their state needs.
+        role = Role.Button,
         onClick = onClick,
     )
 }

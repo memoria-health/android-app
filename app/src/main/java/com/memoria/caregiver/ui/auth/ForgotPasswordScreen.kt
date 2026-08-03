@@ -27,6 +27,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -191,6 +194,7 @@ private fun ColumnScope.FormBody(
                 interactionSource = interactionSource,
                 // `.buttonStyle(.plain)` on iOS — no ripple, no highlight.
                 indication = null,
+                role = Role.Button,
                 onClick = onBack,
             ),
         )
@@ -252,8 +256,14 @@ private fun BackBar(onBack: () -> Unit) {
                 .clickable(
                     interactionSource = interactionSource,
                     indication = null,
+                    role = Role.Button,
                     onClick = onBack,
-                ),
+                )
+                // The chevron is drawn, so there is no symbol name for a screen
+                // reader to fall back on the way SwiftUI's `chevron.left` gives
+                // iOS one. Without this the only way back reads as a blank
+                // button.
+                .semantics { contentDescription = "Back" },
             contentAlignment = Alignment.Center,
         ) {
             // SF Symbol "chevron.left" at system size 18, semibold. Drawn rather

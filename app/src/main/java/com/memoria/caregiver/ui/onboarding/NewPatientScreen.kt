@@ -47,6 +47,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
@@ -181,7 +183,10 @@ private fun Header(onClose: () -> Unit) {
         Box(
             modifier = Modifier
                 .testTag(NewPatientCloseTestTag)
-                .plainClickable(onClick = onClose),
+                .plainClickable(onClick = onClose)
+                // A drawn xmark. Without a name the only way out of the sheet
+                // announces as an unnamed button.
+                .semantics { contentDescription = "Close" },
         ) {
             XmarkGlyph(size = 18.dp, color = Ink)
         }

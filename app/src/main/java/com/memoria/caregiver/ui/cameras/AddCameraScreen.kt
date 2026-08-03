@@ -33,7 +33,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.isTraversalGroup
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
@@ -45,6 +47,7 @@ import com.memoria.caregiver.ui.components.NemaraButtonSize
 import com.memoria.caregiver.ui.components.NemaraButtonVariant
 import com.memoria.caregiver.ui.components.NemaraEyebrow
 import com.memoria.caregiver.ui.components.NemaraField
+import com.memoria.caregiver.ui.components.plainSelectable
 import com.memoria.caregiver.ui.theme.Card
 import com.memoria.caregiver.ui.theme.CardAlt
 import com.memoria.caregiver.ui.theme.Ink
@@ -198,7 +201,16 @@ private fun SourceTabPicker(
             .fillMaxWidth()
             .clip(RoundedCornerShape(Radius.md))
             .background(PaperDim)
-            .padding(2.dp),
+            .padding(2.dp)
+            // iOS's `Picker("Sensor type", selection:)` names the control, and
+            // VoiceOver reads that name before the chosen segment. The Row is
+            // the only thing here that stands for the picker as a whole, so the
+            // name goes on it. `isTraversalGroup` keeps the two segments read as
+            // one control rather than as two unrelated buttons.
+            .semantics(mergeDescendants = false) {
+                isTraversalGroup = true
+                contentDescription = "Sensor type"
+            },
         horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         for (tab in AddCameraTab.entries) {
@@ -208,7 +220,11 @@ private fun SourceTabPicker(
                     .weight(1f)
                     .clip(RoundedCornerShape(Radius.sm))
                     .background(if (isSelected) Card else Color.Transparent)
-                    .plainClickable { onSelect(tab) }
+                    // Selectable, not clickable: a button carries no state, so a
+                    // screen reader would name the segment and never say which
+                    // one is currently chosen — the single thing the segmented
+                    // control exists to show.
+                    .plainSelectable(selected = isSelected, role = Role.Tab) { onSelect(tab) }
                     .padding(vertical = 6.dp),
                 contentAlignment = Alignment.Center,
             ) {
@@ -368,7 +384,10 @@ private fun IconPicker(selection: String, onSelect: (String) -> Unit) {
                         .then(
                             if (isSelected) Modifier.border(1.5.dp, Ink2, shape) else Modifier,
                         )
-                        .plainClickable { onSelect(name) }
+                        // Exclusive choice, and the tile shows which one is
+                        // picked with a border. Selectable is what says that out
+                        // loud; as a button every icon would sound identical.
+                        .plainSelectable(selected = isSelected) { onSelect(name) }
                         // The tile's only content is a drawn glyph, so without
                         // this it is an unlabeled tap target. iOS gets the SF
                         // Symbol's own name as the accessibility label here,

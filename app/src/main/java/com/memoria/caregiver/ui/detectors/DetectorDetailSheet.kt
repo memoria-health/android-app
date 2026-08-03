@@ -57,6 +57,7 @@ import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontStyle
@@ -70,6 +71,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.memoria.caregiver.data.model.Detector
 import com.memoria.caregiver.ui.components.NemaraEyebrow
+import com.memoria.caregiver.ui.components.plainSelectable
 import com.memoria.caregiver.ui.theme.Card
 import com.memoria.caregiver.ui.theme.CardAlt
 import com.memoria.caregiver.ui.theme.Ink
@@ -704,6 +706,7 @@ private fun RoomsCard(state: DetectorDetailState, onStagedChange: (StagedEdits) 
                 label = "All rooms",
                 selected = staged.allRooms,
                 onClick = { onStagedChange(staged.withAllRooms()) },
+                role = Role.Checkbox,
             )
             state.roomOptions.forEach { room ->
                 Chip(
@@ -712,6 +715,8 @@ private fun RoomsCard(state: DetectorDetailState, onStagedChange: (StagedEdits) 
                     // Deselecting the last room snaps back to All rooms — an
                     // empty scope would mean no camera at all.
                     onClick = { onStagedChange(staged.withRoomToggled(room)) },
+                    // Several rooms can be on at once. See Chip's `role`.
+                    role = Role.Checkbox,
                 )
             }
         }
@@ -971,14 +976,28 @@ private fun SensitivityLevel(name: String, tag: String, body: String) {
  * selected settings pills.
  */
 @Composable
-private fun Chip(label: String, selected: Boolean, onClick: () -> Unit) {
+private fun Chip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    /**
+     * `RadioButton` for the exclusive sets — category, sensitivity, trigger,
+     * when — and `Checkbox` for the rooms, where several can be on at once.
+     * Announcing rooms as radio buttons would tell a caregiver that picking a
+     * second room drops the first, which is the opposite of what happens.
+     */
+    role: Role = Role.RadioButton,
+) {
     Text(
         text = label,
         modifier = Modifier
             .clip(CircleShape)
             .background(if (selected) Ink else PaperDim)
             .border(1.dp, if (selected) Ink else Color.Transparent, CircleShape)
-            .plainClickable(onClick = onClick)
+            // Selectable, not clickable: solid ink is the ONLY thing that marks
+            // a chosen chip, so a screen reader that only hears "button" hears
+            // nothing about the setting's actual value.
+            .plainSelectable(selected = selected, role = role, onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 7.dp),
         // iOS: NemaraFont.bodySmall.weight(.medium). No token is 13 Medium —
         // bodyMedium is 14 — so the weight is applied to bodySmall here.

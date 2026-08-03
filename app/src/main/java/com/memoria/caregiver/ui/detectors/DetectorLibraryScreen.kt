@@ -39,6 +39,7 @@ import com.memoria.caregiver.ui.components.NemaraButtonVariant
 import com.memoria.caregiver.ui.components.NemaraCard
 import com.memoria.caregiver.ui.components.NemaraCardTone
 import com.memoria.caregiver.ui.components.NemaraEyebrow
+import com.memoria.caregiver.ui.components.plainToggleable
 import com.memoria.caregiver.ui.theme.Card
 import com.memoria.caregiver.ui.theme.Ink
 import com.memoria.caregiver.ui.theme.Ink2
@@ -314,7 +315,11 @@ private fun EntryRow(
             .fillMaxWidth()
             // A locked row is inert, not merely styled differently: iOS disables
             // the whole button so the tap never reaches `toggle`.
-            .plainClickable(enabled = !locked, onClick = onToggle)
+            //
+            // Toggleable rather than clickable because the row draws a
+            // checkmark.circle: the announcement has to carry whether this
+            // detector is already picked.
+            .plainToggleable(checked = selected, enabled = !locked, onToggle = onToggle)
             .padding(horizontal = 14.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,

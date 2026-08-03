@@ -30,12 +30,14 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.memoria.caregiver.ui.components.NemaraButton
 import com.memoria.caregiver.ui.components.NemaraButtonVariant
+import com.memoria.caregiver.ui.components.plainSelectable
 import com.memoria.caregiver.ui.enrollment.EnrollmentFacing
 import com.memoria.caregiver.ui.enrollment.EnrollmentGeometry
 import com.memoria.caregiver.ui.theme.Card
@@ -395,7 +397,13 @@ private fun CameraPicker(
                     .weight(1f)
                     .clip(RoundedCornerShape(Radius.sm))
                     .background(if (isSelected) Card else Color.Transparent)
-                    .plainClickable(enabled = enabled) { onSelect(option) }
+                    // A segment of a segmented control announces its selected
+                    // state; a plain button would not.
+                    .plainSelectable(
+                        selected = isSelected,
+                        enabled = enabled,
+                        role = Role.Tab,
+                    ) { onSelect(option) }
                     .padding(vertical = 6.dp),
                 contentAlignment = Alignment.Center,
             ) {

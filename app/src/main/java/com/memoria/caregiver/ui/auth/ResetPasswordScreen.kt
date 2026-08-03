@@ -15,7 +15,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.autofill.ContentType
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -184,7 +186,7 @@ private fun CloseToolbar(onClose: () -> Unit) {
             text = "Close",
             style = NemaraType.bodyLarge,
             color = Ink2,
-            modifier = Modifier.clickable(onClick = onClose),
+            modifier = Modifier.clickable(role = Role.Button, onClick = onClose),
         )
     }
 }
@@ -235,6 +237,8 @@ private fun FormBody(
             onValueChange = onPasswordChange,
             placeholder = "At least 8 characters",
             isSecure = true,
+            // A password being chosen, not entered. See SignUpScreen.
+            contentType = ContentType.NewPassword,
         )
         NemaraField(
             label = "Confirm password",
@@ -242,6 +246,8 @@ private fun FormBody(
             onValueChange = onConfirmChange,
             placeholder = "Re-enter it",
             isSecure = true,
+            // The confirmation of the same new password.
+            contentType = ContentType.NewPassword,
         )
     }
 

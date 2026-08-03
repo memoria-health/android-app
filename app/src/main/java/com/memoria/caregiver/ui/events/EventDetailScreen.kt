@@ -237,7 +237,9 @@ private fun DetailNavBar(onBack: () -> Unit) {
                 .align(Alignment.CenterStart)
                 .size(44.dp)
                 .testTag(EventDetailBackTestTag)
-                .plainClickable(onBack),
+                .plainClickable(onBack)
+                // Drawn chevron, no symbol name to inherit. See LoginScreen.
+                .semantics { contentDescription = "Back" },
             contentAlignment = Alignment.Center,
         ) {
             EventGlyph(

@@ -625,7 +625,55 @@ nothing. **Founders receive nothing from Android.**
 ---
 
 ### F-31 — Accessibility and touch targets, at scale
-**All phases · Important · OPEN**
+**All phases · Important · FIXED 2026-08-03 — and its touch-target half was WRONG**
+
+**Fixed.** Every interactive element now declares a role: the eight duplicated
+`plainClickable` helpers emit `Role.Button` internally, so all 46 of their call
+sites get it and a new caller cannot forget. Controls that are not buttons got
+the role that carries *state* — `Role.Tab` with selection for the segmented
+pickers and filter chips, `Role.RadioButton` for single-choice cards,
+`Role.Checkbox` for the multi-select ones. `contentDescription` went 18 → 30,
+covering the drawn label-less controls (roster `+`, roster avatar, banner
+dismiss, four back chevrons, two sheet closes). Autofill content types are wired,
+so email, new-password and revealed-password fields now reach a password manager.
+**Zero layout modifiers changed** — the whole main-source diff is semantics.
+
+**The touch-target claim in this finding was wrong, and so were F-15 I-6 and
+I-12, which rested on the same premise.** Measured rather than assumed: Compose
+already inflates every clickable's hit rect to the platform 48dp minimum, and it
+holds through `verticalScroll`, `Modifier.clip` and `PullToRefreshBox`. A 12dp,
+a 20dp and a 44dp clickable all report a `touchBoundsInRoot` of exactly 48×48 —
+so `assertTouchWidthIsEqualTo` cannot even tell them apart. A tap 10dp clear of
+the 20dp roster `+` fires it; in the 12dp gap between that `+` and the avatar the
+tap resolves to the nearest control, with no dead zone.
+
+It fails in exactly one shape — a small clickable nested inside a larger
+clickable, where the parent takes the strict hit and the child's expansion never
+applies. All ten flagged sites were checked; none has a clickable ancestor. Both
+measurements are pinned as behaviour tests so that if a future change introduces
+a clickable ancestor, it fails loudly.
+
+**Consequence for work already done:** the 44dp box I wrapped around
+`PatientHeader`'s Home button (F-15 I-6) was unnecessary. It is harmless and
+states the intent explicitly, so it stays — but the reasoning that produced it
+was wrong, and "iOS gets 44pt free from UIKit, therefore Compose does not" was an
+assumption I never measured.
+
+---
+
+### F-36 — Two host tests are flaky, independent of any recent change
+**Integration · Minor · OPEN**
+
+Full runs intermittently fail one of `NewPatientHostTest` / `AuthNavHostTest`;
+each passes in isolation. Confirmed pre-existing: reverting the recent
+onboarding/detector files and running `NewPatientHostTest` five times still
+failed roughly one in five. Cause looks like mock-backend and real-file-I/O
+races. Recorded rather than absorbed, because a suite that fails one run in five
+teaches people to re-run instead of read.
+
+---
+
+
 
 80 `clickable` call sites in `ui/`; 15 declare a `contentDescription`; exactly
 **one** declares a `role` — the `Role.Switch` from the F-18 fix. Every tappable

@@ -20,6 +20,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -88,6 +89,7 @@ internal fun CallButton(
                 indication = null,
                 // `case .connecting: break` on iOS, plus `.disabled(state == .connecting)`.
                 enabled = talkButtonAction(state) != TalkButtonAction.NONE,
+                role = Role.Button,
                 onClick = onTap,
             )
             .semantics { contentDescription = label },

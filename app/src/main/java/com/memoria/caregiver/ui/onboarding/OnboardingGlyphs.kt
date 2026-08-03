@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.memoria.caregiver.ui.theme.Line
@@ -247,6 +248,14 @@ internal fun Modifier.plainClickable(enabled: Boolean = true, onClick: () -> Uni
         interactionSource = interactionSource,
         indication = null,
         enabled = enabled,
+        // Every one of these is a SwiftUI `Button` on iOS, and a button tells a
+        // screen reader that it is a button. Without a role TalkBack reads the
+        // label as ordinary text: the caregiver hears the words and is never
+        // told they can be tapped. Set inside the helper rather than at each
+        // call site so a new caller cannot be added without it. Controls that
+        // are a CHOICE rather than an action use `plainSelectable` or
+        // `plainToggleable`, which carry the role their state needs.
+        role = Role.Button,
         onClick = onClick,
     )
 }

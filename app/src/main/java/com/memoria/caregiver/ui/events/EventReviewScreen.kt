@@ -28,6 +28,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -382,7 +384,9 @@ private fun ReviewNavBar(onBack: () -> Unit) {
                 .align(Alignment.CenterStart)
                 .size(NAV_BAR_TOUCH_TARGET)
                 .testTag(EVENT_REVIEW_BACK_TAG)
-                .plainClickable(onBack),
+                .plainClickable(onBack)
+                // Drawn chevron, no symbol name to inherit. See LoginScreen.
+                .semantics { contentDescription = "Back" },
             contentAlignment = Alignment.Center,
         ) {
             EventGlyph(

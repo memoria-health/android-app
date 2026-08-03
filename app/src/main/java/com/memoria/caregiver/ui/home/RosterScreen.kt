@@ -20,6 +20,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.LastBaseline
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.memoria.caregiver.ui.components.NemaraAvatar
 import com.memoria.caregiver.ui.theme.Ink
@@ -125,7 +128,15 @@ fun RosterScreen(
                             modifier = Modifier
                                 .size(HeaderPlusSize)
                                 .testTag(RosterAddPatientTestTag)
-                                .plainClickable(onAddPatient),
+                                .plainClickable(onAddPatient)
+                                // A bare glyph. iOS gets a VoiceOver name from
+                                // the SF Symbol "plus"; a drawn vector has none,
+                                // so without this the only way to add a patient
+                                // announces as an unnamed button. The wording is
+                                // the empty-roster button's own label, so the
+                                // two entry points to the same sheet say the
+                                // same thing.
+                                .semantics { contentDescription = "Add a patient" },
                         )
                         NemaraAvatar(
                             // The CAREGIVER's initial, not a patient's — this
@@ -133,7 +144,11 @@ fun RosterScreen(
                             letter = firstName,
                             modifier = Modifier
                                 .testTag(RosterEditProfileTestTag)
-                                .plainClickable(onEditProfile),
+                                .plainClickable(onEditProfile)
+                                // The avatar shows an initial, which a screen
+                                // reader would read as a single letter and no
+                                // more. Named for what tapping it does.
+                                .semantics { contentDescription = "Edit profile" },
                             size = HeaderAvatarSize,
                         )
                     }
@@ -172,6 +187,14 @@ private fun Modifier.plainClickable(onClick: () -> Unit): Modifier {
     return this.clickable(
         interactionSource = interactionSource,
         indication = null,
+        // Every one of these is a SwiftUI `Button` on iOS, and a button tells a
+        // screen reader that it is a button. Without a role TalkBack reads the
+        // label as ordinary text: the caregiver hears the words and is never
+        // told they can be tapped. Set inside the helper rather than at each
+        // call site so a new caller cannot be added without it. Controls that
+        // are a CHOICE rather than an action use `plainSelectable` or
+        // `plainToggleable`, which carry the role their state needs.
+        role = Role.Button,
         onClick = onClick,
     )
 }

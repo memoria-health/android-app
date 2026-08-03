@@ -48,6 +48,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -551,6 +554,7 @@ private fun NavigationBar(
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
+                    role = Role.Button,
                 ) { onCancel() },
             style = NemaraType.bodyLarge,
             color = Ink2,
@@ -567,7 +571,12 @@ private fun NavigationBar(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
                     enabled = rescanEnabled,
-                ) { onRescan() },
+                    role = Role.Button,
+                ) { onRescan() }
+                // A drawn glyph with no label. iOS's toolbar `Image(systemName:
+                // "arrow.clockwise")` gives VoiceOver a name from the symbol;
+                // a Canvas has none, so it is stated.
+                .semantics { contentDescription = "Rescan" },
         ) {
             ArrowClockwiseGlyph(size = NavGlyphSize, color = Terra)
         }

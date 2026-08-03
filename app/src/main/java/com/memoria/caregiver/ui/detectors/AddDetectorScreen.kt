@@ -46,6 +46,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -57,6 +60,8 @@ import com.memoria.caregiver.ui.components.NemaraButton
 import com.memoria.caregiver.ui.components.NemaraButtonSize
 import com.memoria.caregiver.ui.components.NemaraButtonVariant
 import com.memoria.caregiver.ui.components.NemaraEyebrow
+import com.memoria.caregiver.ui.components.plainSelectable
+import com.memoria.caregiver.ui.components.plainToggleable
 import com.memoria.caregiver.ui.theme.Card
 import com.memoria.caregiver.ui.theme.CardAlt
 import com.memoria.caregiver.ui.theme.Ink
@@ -184,7 +189,11 @@ private fun Header(onClose: () -> Unit) {
             symbol = "xmark",
             size = 18.dp,
             color = Ink,
-            modifier = Modifier.plainClickable(onClick = onClose),
+            modifier = Modifier
+                .plainClickable(onClick = onClose)
+                // A drawn xmark. Without a name the only way out of the sheet
+                // announces as an unnamed button.
+                .semantics { contentDescription = "Close" },
         )
         Spacer(Modifier.weight(1f))
         Text(
@@ -514,7 +523,8 @@ private fun TriggerCard(
             .clip(shape)
             .background(if (selected) TerraSoft else Card)
             .border(1.5.dp, if (selected) Terra else Line, shape)
-            .plainClickable(onClick = onSelect)
+            // The card draws a filled radio glyph, so it announces as one.
+            .plainSelectable(selected = selected, onClick = onSelect)
             .padding(horizontal = 14.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.Top,
@@ -548,7 +558,8 @@ private fun CategoryCard(
             .clip(shape)
             .background(if (selected) soft else Card)
             .border(1.5.dp, if (selected) tone else Line, shape)
-            .plainClickable(onClick = onSelect)
+            // One of a set of exclusive categories.
+            .plainSelectable(selected = selected, onClick = onSelect)
             .padding(vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
@@ -691,7 +702,8 @@ private fun CadenceSegment(
                 .fillMaxWidth()
                 .clip(shape)
                 .background(if (selected) Card else Color.Transparent)
-                .plainClickable(onClick = onSelect)
+                // A segment of a segmented control announces its selected state.
+                .plainSelectable(selected = selected, role = Role.Tab, onClick = onSelect)
                 .padding(vertical = 10.dp),
         )
     }
@@ -705,7 +717,8 @@ private fun DayCircle(label: String, selected: Boolean, onToggle: () -> Unit) {
             .clip(CircleShape)
             .background(if (selected) Ink else Card)
             .border(if (selected) 0.dp else 1.dp, Line, CircleShape)
-            .plainClickable(onClick = onToggle),
+            // Each day is independently on or off, and the only cue is the fill.
+            .plainToggleable(checked = selected, onToggle = onToggle),
         contentAlignment = Alignment.Center,
     ) {
         Text(label, style = NemaraType.bodySmallStrong, color = if (selected) Paper else Ink2)

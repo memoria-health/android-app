@@ -35,6 +35,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -43,6 +44,7 @@ import com.memoria.caregiver.legal.LegalConstants
 import com.memoria.caregiver.ui.components.NemaraButton
 import com.memoria.caregiver.ui.components.NemaraButtonSize
 import com.memoria.caregiver.ui.components.NemaraButtonVariant
+import com.memoria.caregiver.ui.components.plainSelectable
 import com.memoria.caregiver.ui.theme.Card
 import com.memoria.caregiver.ui.theme.Ink
 import com.memoria.caregiver.ui.theme.Ink2
@@ -170,6 +172,7 @@ fun TermsGateScreen(
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
+                        role = Role.Button,
                     ) { onCancel() },
                 style = NemaraType.bodyLarge,
                 color = Ink,
@@ -299,10 +302,9 @@ private fun DocumentPicker(
                     .weight(1f)
                     .clip(RoundedCornerShape(Radius.sm))
                     .background(if (isSelected) Card else Color.Transparent)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                    ) { onSelect(doc.id) }
+                    // Selectable rather than clickable, so the announcement says
+                    // WHICH document is open. See AddCameraScreen's picker.
+                    .plainSelectable(selected = isSelected, role = Role.Tab) { onSelect(doc.id) }
                     .padding(vertical = 6.dp),
                 contentAlignment = Alignment.Center,
             ) {

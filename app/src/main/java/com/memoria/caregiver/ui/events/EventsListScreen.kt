@@ -25,11 +25,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.memoria.caregiver.data.model.DetectionEvent
+import com.memoria.caregiver.ui.components.plainSelectable
 import com.memoria.caregiver.ui.theme.Ink
 import com.memoria.caregiver.ui.theme.Ink2
 import com.memoria.caregiver.ui.theme.Ink3
@@ -170,7 +174,9 @@ private fun FilterChips(
                 modifier = Modifier
                     .clip(CircleShape)
                     .background(if (on) Ink else Color.Transparent)
-                    .plainClickable { onSelect(filter) }
+                    // The chip inverts to show which filter is live. Selectable
+                    // is what puts that into the announcement.
+                    .plainSelectable(selected = on, role = Role.Tab) { onSelect(filter) }
                     .padding(horizontal = 11.dp, vertical = 6.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -280,7 +286,11 @@ private fun ReviewErrorBanner(message: String, onDismiss: () -> Unit) {
             tint = Ink3,
             modifier = Modifier
                 .testTag(EventsListReviewErrorDismissTestTag)
-                .plainClickable(onDismiss),
+                .plainClickable(onDismiss)
+                // A drawn xmark. Without a name the only way to clear the error
+                // banner announces as an unnamed button sitting next to the
+                // error text.
+                .semantics { contentDescription = "Dismiss" },
         )
     }
 }
@@ -298,6 +308,14 @@ internal fun Modifier.plainClickable(onClick: () -> Unit): Modifier {
     return this.clickable(
         interactionSource = interactionSource,
         indication = null,
+        // Every one of these is a SwiftUI `Button` on iOS, and a button tells a
+        // screen reader that it is a button. Without a role TalkBack reads the
+        // label as ordinary text: the caregiver hears the words and is never
+        // told they can be tapped. Set inside the helper rather than at each
+        // call site so a new caller cannot be added without it. Controls that
+        // are a CHOICE rather than an action use `plainSelectable` or
+        // `plainToggleable`, which carry the role their state needs.
+        role = Role.Button,
         onClick = onClick,
     )
 }

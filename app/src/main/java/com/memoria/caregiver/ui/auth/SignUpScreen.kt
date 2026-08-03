@@ -27,12 +27,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.autofill.ContentType
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
@@ -289,6 +291,10 @@ fun SignUpScreen(
                     // (Sentences) would capitalize the first character of every
                     // password on Android and not on iOS.
                     capitalization = KeyboardCapitalization.None,
+                    // NewPassword, not Password: this is the password being
+                    // chosen, so the manager should offer to generate and save
+                    // one rather than offering an existing one back.
+                    contentType = ContentType.NewPassword,
                 )
 
                 NemaraPasswordChecklist(value = state.password)
@@ -300,6 +306,9 @@ fun SignUpScreen(
                     placeholder = "Re-enter password",
                     isSecure = true,
                     capitalization = KeyboardCapitalization.None,
+                    // The confirmation of the same new password, so it takes the
+                    // same hint and the manager fills both in one pass.
+                    contentType = ContentType.NewPassword,
                 )
 
                 if (passwordsMismatch) {
@@ -375,6 +384,7 @@ private fun SignUpNavigationBar(onBack: () -> Unit) {
                 .clickable(
                     interactionSource = interactionSource,
                     indication = null,
+                    role = Role.Button,
                     onClick = onBack,
                 )
                 // The Canvas glyph carries no text, so TalkBack would announce
@@ -401,10 +411,15 @@ private fun SignUpTermsRow(accepted: Boolean, onReview: () -> Unit) {
     val boxShape = RoundedCornerShape(5.dp)
 
     Row(
+        // A button, NOT a checkbox, even though it draws one: the tap opens
+        // the terms sheet rather than flipping the box, and the box only ever
+        // changes once the sheet is accepted. Announcing it as a checkbox would
+        // promise a toggle that tapping does not perform.
         modifier = Modifier.clickable(
             interactionSource = interactionSource,
             // `.buttonStyle(.plain)` — no ripple, no tint change.
             indication = null,
+            role = Role.Button,
             onClick = onReview,
         ),
         horizontalArrangement = Arrangement.spacedBy(TermsRowGap),
@@ -459,6 +474,7 @@ private fun SignUpLoginLink(onNavigateToLogin: () -> Unit) {
             modifier = Modifier.clickable(
                 interactionSource = interactionSource,
                 indication = null,
+                role = Role.Button,
                 onClick = onNavigateToLogin,
             ),
         )

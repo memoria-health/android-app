@@ -16,9 +16,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.autofill.ContentType
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.semantics.contentType
 import androidx.compose.ui.semantics.password
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
@@ -63,10 +65,48 @@ fun NemaraField(
     keyboardType: KeyboardType = KeyboardType.Text,
     capitalization: KeyboardCapitalization = KeyboardCapitalization.Sentences,
     hint: String? = null,
+    /**
+     * What a password manager should offer to put in this field.
+     *
+     * **Android will not offer to fill a Compose text field without it.** iOS
+     * needs nothing: `SecureField` is a password field to UIKit, and a
+     * `.keyboardType(.emailAddress)` field is an address field, so the Swift
+     * declares no `textContentType` anywhere and still gets Keychain and
+     * 1Password offering to fill. A Compose `BasicTextField` is an anonymous
+     * editor until this says otherwise, so the same screens on Android offered
+     * nothing at all.
+     *
+     * That matters more here than the usual amount. Caregivers skew older and a
+     * generated password they cannot autofill is one they cannot type, so a
+     * missing declaration is not a missing convenience — it is a sign-in they
+     * do not complete.
+     *
+     * `null` leaves it to the derivation below plus whatever Compose works out
+     * for itself. Two cases have to say it out loud: a password being SET
+     * rather than entered wants [ContentType.NewPassword], so the manager
+     * offers to generate and save one instead of handing the old one back; and
+     * a password field whose mask can be toggled off wants
+     * [ContentType.Password] stated, because unmasking drops the keyboard type
+     * Compose derives from.
+     */
+    contentType: ContentType? = null,
     trailing: (@Composable () -> Unit)? = null,
 ) {
     val keyboard = LocalSoftwareKeyboardController.current
     val shape = RoundedCornerShape(Radius.md)
+    // A masked field needs nothing here. Compose already derives
+    // `ContentType.Password` from `KeyboardType.Password`, which the secure
+    // branch below sets unconditionally — measured, not assumed. Declaring it
+    // again would be dead code, so what remains is only what Compose does NOT
+    // derive.
+    val resolvedContentType = contentType ?: when {
+        // Username as well as EmailAddress: the address IS the account name
+        // here, and a manager matches its stored credential on the username
+        // hint. With only EmailAddress it fills the address and leaves the
+        // password field alone, which is the worse half of no autofill at all.
+        keyboardType == KeyboardType.Email -> ContentType.EmailAddress + ContentType.Username
+        else -> null
+    }
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         NemaraEyebrow(label)
@@ -143,7 +183,18 @@ fun NemaraField(
                         // without this TalkBack reads the password aloud and any
                         // accessibility service can harvest it. iOS's
                         // SecureField is a password field to UIKit end to end.
-                        .then(if (isSecure) Modifier.semantics { password() } else Modifier),
+                        .then(if (isSecure) Modifier.semantics { password() } else Modifier)
+                        // What makes the field visible to a password manager.
+                        // See the `contentType` parameter.
+                        .then(
+                            if (resolvedContentType != null) {
+                                // `this.` because the parameter of the same name
+                                // shadows the semantics property inside here.
+                                Modifier.semantics { this.contentType = resolvedContentType }
+                            } else {
+                                Modifier
+                            },
+                        ),
                 )
             }
 

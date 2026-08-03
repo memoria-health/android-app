@@ -39,6 +39,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.Dp
@@ -232,7 +233,14 @@ fun CountryPicker(
             .clip(shape)
             .background(Card)
             .border(1.dp, Line, shape)
-            .clickable(interactionSource = interactionSource, indication = null) { showing = true }
+            // DropdownList, not Button: the tap opens a list of countries to
+            // choose from, and that is what TalkBack announces the difference
+            // between. iOS gets it from the `Menu`/sheet it presents.
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                role = Role.DropdownList,
+            ) { showing = true }
             .padding(horizontal = 12.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -335,6 +343,7 @@ private fun CountryPickerSheet(
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
+                        role = Role.Button,
                     ) { onCancel() },
                 style = NemaraType.bodyLarge,
                 // iOS: .tint(NemaraColor.ink) on the Cancel button.
@@ -383,10 +392,9 @@ private fun CountryPickerSheet(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                            ) { onSelect(opt.code) }
+                            // The checkmark on the current country is drawn;
+                            // `selectable` is what says it out loud.
+                            .plainSelectable(selected = opt.code == code) { onSelect(opt.code) }
                             .padding(horizontal = 16.dp, vertical = 11.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {

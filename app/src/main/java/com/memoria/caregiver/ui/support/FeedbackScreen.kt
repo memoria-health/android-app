@@ -57,6 +57,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontStyle
@@ -661,7 +662,9 @@ private fun FeedbackNavBar(onDismiss: () -> Unit) {
                 .padding(start = 2.dp)
                 .size(NAV_BAR_HEIGHT)
                 .testTag(FEEDBACK_BACK_TAG)
-                .plainClickable(onDismiss),
+                .plainClickable(onDismiss)
+                // Drawn chevron, no symbol name to inherit. See LoginScreen.
+                .semantics { contentDescription = "Back" },
             contentAlignment = Alignment.Center,
         ) {
             ChevronLeftGlyph(size = CHEVRON_SIZE, color = Ink)
@@ -677,7 +680,19 @@ private fun FeedbackNavBar(onDismiss: () -> Unit) {
 @Composable
 internal fun Modifier.plainClickable(onClick: () -> Unit): Modifier {
     val interactionSource = remember { MutableInteractionSource() }
-    return this.clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+    return this.clickable(
+        interactionSource = interactionSource,
+        indication = null,
+        // Every one of these is a SwiftUI `Button` on iOS, and a button tells a
+        // screen reader that it is a button. Without a role TalkBack reads the
+        // label as ordinary text: the caregiver hears the words and is never
+        // told they can be tapped. Set inside the helper rather than at each
+        // call site so a new caller cannot be added without it. Controls that
+        // are a CHOICE rather than an action use `plainSelectable` or
+        // `plainToggleable`, which carry the role their state needs.
+        role = Role.Button,
+        onClick = onClick,
+    )
 }
 
 /**

@@ -49,6 +49,7 @@ import com.memoria.caregiver.ui.components.NemaraCard
 import com.memoria.caregiver.ui.components.NemaraChip
 import com.memoria.caregiver.ui.components.NemaraChipTone
 import com.memoria.caregiver.ui.components.NemaraEyebrow
+import com.memoria.caregiver.ui.components.plainToggleable
 import com.memoria.caregiver.ui.theme.Action
 import com.memoria.caregiver.ui.theme.ActionSoft
 import com.memoria.caregiver.ui.theme.Card
@@ -530,7 +531,14 @@ private fun DetectorAssignmentRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .plainClickable(enabled = detectorRowEnabled(detector, isBusy), onClick = onToggle)
+            // The row's trailing checkmark.circle is a checkbox, so it says
+            // "checked"/"not checked" rather than announcing as a plain button
+            // that gives no clue whether the detector is already assigned.
+            .plainToggleable(
+                checked = isAssigned,
+                enabled = detectorRowEnabled(detector, isBusy),
+                onToggle = onToggle,
+            )
             .padding(Spacing.sm),
         horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         verticalAlignment = Alignment.CenterVertically,
