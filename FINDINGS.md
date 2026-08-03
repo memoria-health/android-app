@@ -34,7 +34,48 @@ into a file — is the finding that matters most here.**
 ## OPEN
 
 ### F-41 — The exit-door picker is built and still unreachable; it needs a frame grab
-**Phase 4 · Important · OPEN — client work, unblocked by F-40**
+**Phase 4 · Important · FIXED 2026-08-03**
+
+**Resolution.** Three files, and the picker is reachable:
+
+- `ui/live/LiveKitFrameCapture.kt` — one frame off a track as JPEG. Attaches a
+  `VideoSink`, keeps the first frame, detaches. The guard on "first" is not
+  defensive padding: `onFrame` runs on the WebRTC decode thread and detaching is
+  not instantaneous, so a second frame does arrive and resuming a continuation
+  twice throws.
+- `ui/detectors/WanderingDoorCache.kt` — the room rule and the two caches.
+- `ui/detectors/WanderingDoorPickerViewModel.kt` + `WanderingDoorPickerHost.kt` —
+  the producer and the presentation, replacing the `NotBuiltScreen`.
+
+**The room rule is the part worth testing and it has 11 tests.** This class may
+open a LiveKit room, and if it does it must close it — but if the Live tab
+already has one up it must reuse it and leave it alone. Both directions are
+user-visible: disconnecting a room we did not open kills the caregiver's live
+video underneath them, and leaving one we did open holds a subscription for the
+rest of the session. There is a test for the teardown on each of the three exit
+paths, because the failing one would be whichever was not covered.
+
+**Two seams, for the same reason as F-40's `LiveRoom`.** `VideoTrack` is an
+abstract LiveKit class that cannot be instantiated off a device, so a map typed
+with it cannot be populated by a test — the cache therefore takes "is this
+identity publishing" as a predicate rather than reading the map itself. The app
+wires it to exactly the map read it replaces.
+
+**A swallowed error that looked like an answer.** The cache first used
+`android.util.Base64`, which is a throwing stub on a plain JVM — and the
+`catch (Throwable)` around the door-detection call turned that stub exception
+into "the VLM found no doors". Green screen, no doors, no error. Swapped to
+`java.util.Base64`, which exists at minSdk 26, produces the same string, and
+works in both places. The catch stays, because a real VLM failure genuinely is
+"tap-place them yourself", but it can no longer hide a programming error.
+
+**Reachability is now zero orphans.** Every `*Screen` composable in the app has
+a caller.
+
+**The original finding follows.**
+
+---
+
 
 `WanderingDoorPickerScreen` is the one screen left with zero callers. It is not
 missing: 900-odd lines, tested, with the tap-placement geometry and the

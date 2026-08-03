@@ -17,6 +17,8 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.memoria.caregiver.analytics.LocalAnalytics
 import com.memoria.caregiver.data.remote.ApiError
+import com.memoria.caregiver.data.livekit.LiveRoom
+import com.memoria.caregiver.ui.detectors.WanderingDoorPickerHost
 import com.memoria.caregiver.data.remote.NemaraApiClient
 import com.memoria.caregiver.ui.nav.NotBuiltScreen
 import com.memoria.caregiver.ui.nav.ScopedViewModelStore
@@ -49,6 +51,13 @@ fun CameraDetailHost(
     cameraId: String,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    /**
+     * Passed through to the exit-door picker, which grabs a still frame off the
+     * live feed. Both are the app's single instances — the picker reuses the
+     * Live tab's room if it is already up rather than opening a second one.
+     */
+    liveKit: LiveRoom,
+    caregiverId: () -> String?,
 ) {
     // Scoped, so leaving the detail CLEARS the ViewModel. Activity-scoped, the
     // assignment set and the door config from one sensor would still be on
@@ -89,24 +98,18 @@ fun CameraDetailHost(
                 modifier = modifier,
             )
 
-            showingDoorPicker -> NotBuiltScreen(
-                title = "Exit doors",
-                // Named honestly rather than left as a dead row. The picker
-                // itself is built (`WanderingDoorPickerScreen`) and, as of the
-                // Live tab landing, LiveKit IS connected — so the original
-                // reason here ("live video is not connected") stopped being
-                // true and was corrected rather than left to mislead.
-                //
-                // What is genuinely missing is the frame grab: iOS has
-                // `WanderingDoorCache` + `LiveKitFrameCapture`, which take one
-                // frame off the track and hand it over as a JPEG. Android has
-                // neither. The hard half already exists —
-                // `ui/live/VideoFramePixels.i420ToArgb` is the same conversion
-                // the blur renderer uses — so this is a sink, a bitmap and a
-                // cache, not a new subsystem. FINDINGS.md F-41.
-                reason = "Picking exit doors needs a still photo from this " +
-                    "sensor's live feed, and capturing one is not built yet.",
-                onBack = { showingDoorPicker = false },
+            showingDoorPicker -> WanderingDoorPickerHost(
+                api = api,
+                liveKit = liveKit,
+                patientId = patientId,
+                cameraId = cameraId,
+                cameraName = state.camera?.room.orEmpty(),
+                // Null means the sensor has never finished pairing, so there is
+                // no feed to photograph. The picker says so rather than
+                // spinning; see WanderingDoorPickerViewModel.
+                livekitIdentity = state.camera?.livekitIdentity,
+                caregiverId = caregiverId,
+                onClose = { showingDoorPicker = false },
                 modifier = modifier,
             )
 

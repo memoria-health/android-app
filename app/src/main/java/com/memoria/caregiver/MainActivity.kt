@@ -700,6 +700,11 @@ private fun PatientTabs(
                 patientId = patientId,
                 cameraId = open.cameraId,
                 onBack = { destination = PatientDestination.None },
+                // The app's single room instance. The door picker reuses it
+                // when the Live tab already has it up, rather than opening a
+                // second connection to the same room.
+                liveKit = env.liveKit,
+                caregiverId = { env.auth.currentCaregiver.value?.id },
             )
         }
 
