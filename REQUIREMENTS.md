@@ -31,7 +31,7 @@ Legend — **Blocks:** what cannot be completed. **Needs:** the requirement itse
 
 | id | Item | Needs | Blocks | Phase |
 |---|---|---|---|---|
-| REQ-7 | FCM push | Firebase project + `google-services.json` (gitignored) | Push receipt end to end | 7 |
+| REQ-7 | FCM push | **THE ONE BLOCKER ON PUSH.** Firebase project + `google-services.json` (gitignored). SDK settled 2026-08-03 as FCM (DECISIONS.md D-016, which also records the OEM-battery-killer and no-Play-Services risks). The client half — channel, service, tap payload, deep link — can be built without it. | Receiving an actual notification | 7 |
 | REQ-8 | Backend device registration | Backend decision on `/v1/me/devices` — `platform` discriminator vs sibling route (`QUESTIONS.md` Q1) | The registration call only; token retrieval and display are unblocked | 7 |
 | REQ-9 | Play signing identity | Upload key + Play Console entry | Any release build. Debug is unaffected. | later |
 | REQ-10 | Real ToS / Privacy PDFs | Veritas documents (`QUESTIONS.md` Q4) | Nothing — placeholders ship, swap on both platforms together | 8 |
@@ -44,7 +44,7 @@ Legend — **Blocks:** what cannot be completed. **Needs:** the requirement itse
 | REQ-12 | Face yaw-sweep clip | A recorded video of a face turning through the yaw range, fed via `-camera-front videofile:` | Deterministic enrollment tests. **This is what makes REQ-4 tuning-only rather than blocking.** | 6 |
 | REQ-23 | Person-detection model for people-blur | An on-device person detector — MediaPipe or TFLite SSD/MobileNet — vendored and wired to the `PersonDetector` interface. The whole blur pipeline (box maths, padding, hold/decay, downscale-blur composition, I420 conversion) is built and covered by 59 tests, but the interface has no implementation and `BlurredVideoView` is never called, so **the "Blur people" toggle currently blurs nothing**. PARITY.md §12: follow the WEB dashboard's COCO-SSD approach, not iOS's Vision, because the shared constants (pad 0.18, sigma 36, hold 1500ms, confidence 0.25) were tuned against box semantics. | The people-blur feature end to end | 4 |
 | REQ-13 | Synthetic LiveKit publisher | A test room publishing a known video pattern | Client-side video tests without REQ-2 | 4 |
-| REQ-14 | iOS screenshot corpus | A **built, signed-in** iOS app at the port pin. Investigated 2026-08-01: `xcodegen` and iOS 17.2 simulators are available and the repo is clean on the pin branch, but the only prebuilt app is from May 22, months stale. Building is feasible; **populating the screens is not** — almost every screen needs a session and seeded data (REQ-11, REQ-16). SwiftUI `#Preview` blocks cannot be captured headlessly. | A true pixel-level parity gate | all |
+| REQ-14 | iOS screenshot corpus | **MET 2026-08-02.** `scratchpad/ios-parity/run.sh` captures all nine screens in one idempotent command, driving the app by bundle identifier so it never touches the iOS repo. Its first two comparisons found a missing support button and a wrong tab tint (F-22). Caveat: the iOS app is now 29 commits past the port pin, so what the captures represent needs settling. ~~Old note:~~ | A **built, signed-in** iOS app at the port pin. Investigated 2026-08-01: `xcodegen` and iOS 17.2 simulators are available and the repo is clean on the pin branch, but the only prebuilt app is from May 22, months stale. Building is feasible; **populating the screens is not** — almost every screen needs a session and seeded data (REQ-11, REQ-16). SwiftUI `#Preview` blocks cannot be captured headlessly. | A true pixel-level parity gate | all |
 | REQ-15 | Realtime payload corpus | Captured raw `postgres_changes` rows vs REST responses | The 10 lenient-decode rules (`PARITY.md` §7) — the dual-shape bug class | 3 |
 | REQ-16 | Backend fixture / seeded state | **PARTLY MET 2026-08-02.** Local stack up (Supabase :54341, FastAPI :8002 — the backend container had been dead 18h and was restarted). One patient (Margaret Doyle) with 4 detectors, seeded through the real API. Cameras and events still 0: both need real hardware or a detection run. | Live video and event screens | 2 |
 
@@ -102,3 +102,34 @@ correct number and still looks wrong. That is what REQ-14 is for.
 - **Tablet and landscape.** iOS is phone-portrait only.
 - **Localization.** iOS ships English only.
 - **Module splitting.** Single `:app` until something forces otherwise.
+
+---
+
+## Status, refreshed 2026-08-03
+
+Kept honest because this file is the handoff, and it had gone stale.
+
+**Met:** REQ-11 (test caregiver), REQ-14 (screenshot corpus), REQ-16 (partly —
+one patient with detectors; cameras and events still need hardware or a
+detection run), REQ-22 (avatar renderer wired; server side proven, client side
+unproven — see F-21).
+
+**Blocked on Aryaman, not on work:**
+- **REQ-7** — `google-services.json`. The only true blocker on push.
+- **REQ-8 / Q1** — the `/v1/me/devices` shape. Blocks registration alone.
+- **REQ-10 / Q4** — the real Veritas legal documents. Placeholders ship and are
+  verified rasterising on a device; swap on both platforms together.
+- **REQ-17 / Q5** — the Android sensor-setup step 2 interaction.
+- **REQ-18 / Q2** — what substitutes for Vision's `faceCaptureQuality`, and the
+  recalibration of the 0.4/0.25 floors against it.
+
+**Blocked on hardware:** REQ-1 (blur performance), REQ-2 (real cameras),
+REQ-3 (sensor Wi-Fi), REQ-4 (enrollment calibration), REQ-5 (talk audio),
+REQ-6 (battery and thermals), REQ-12 (yaw-sweep clip), REQ-13 (synthetic
+publisher). Also REQ-22's client half and F-3's luma range, both of which need
+one look at a real device.
+
+**Still not stood up:** REQ-19 (CI), REQ-20 (off-machine backup — 60-odd commits
+still exist in exactly one place, in a cloud-synced directory), REQ-21
+(instrumented tests), REQ-23 (person-detection model; the blur toggle is gated
+off until it lands, F-19).

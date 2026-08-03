@@ -33,27 +33,63 @@ into a file — is the finding that matters most here.**
 
 ## OPEN
 
-### F-13 — The main tab bar is text-only where iOS shows icon + label
-**Integration · Minor · FIXED 2026-08-02**
+### F-3 — Scene luma is measured on a different scale than iOS
+**Phase 6 · Important · CONFIRMED 2026-08-02 · needs a device to fix correctly**
 
-Both bars now render icon + label, as `Label(title, systemImage:)` does. Six SF
-Symbols drawn as vectors in `ui/nav/TabGlyphs.kt` — `house.fill`, `gearshape`,
-`video.fill`, `waveform.path`, `camera.fill` and
-`sensor.tag.radiowaves.forward.fill`. The last two are simplified to the part
-that reads at 24dp; the full symbols close up to noise at tab-bar size, which is
-noted at each one.
+Enrollment reads brightness from the YUV luma plane, which is studio-swing
+(16–235) on most devices, where iOS applies a full-range Rec.601 weighting to
+BGRA. The same room therefore reports a **higher** luma on Android, and the
+`0.28` dark-luma floor that gates "too dark" guidance was calibrated against
+the iOS scale.
 
-**Original entry, for the record:**
+**Failure guarded:** the too-dark warning fires late or not at all, so
+enrollment accepts frames in light iOS would have rejected — silently degrading
+the face gallery that everything downstream depends on.
 
-`MainShell`'s `NavigationBar` renders each tab's title as the *icon* slot with
-no label, so the bar reads as two text pills. iOS uses
-`Label("Home", systemImage: "house.fill")` and
-`Label("Settings", systemImage: "gearshape")` — an icon above a label.
+Related to REQ-18 / Q2, but distinct: that is about the *quality* metric, this
+is about *brightness*, which the port assumed transferred 1:1 and does not.
 
-Not a discovery; I wrote it that way to get the shell standing and did not want
-it to pass unrecorded, because it looks deliberate on screen. The two glyphs
-need drawing the way `PatientGlyphs.kt` draws `house.fill`, and one of them
-already exists there.
+**The arithmetic.** A scene iOS scores at exactly the 0.28 dark floor is luma
+71/255. The same scene on a studio-swing plane reads `16 + 0.28 x 219 = 77`, or
+0.30 — above the floor. The warning fires late, or never.
+
+**Verified in source.** `sceneLuma` in `ui/enrollment/EnrollmentFrameAnalysis.kt`
+divides the raw plane value by 255. The comment above it addressed the Rec.601
+*weighting* (which genuinely does transfer) and said nothing about *range*,
+which is the half that does not — so the code read as checked when it was not.
+That comment now states the gap.
+
+**Deliberately not fixed blind.** `(y - 16) / 219` is right only if the plane is
+studio-swing, and Android exposes no API for which range a device emits.
+Applying it unconditionally trades this error for a comparable one on
+full-range devices. Pointing a camera at a known target settles it in minutes.
+Folded into REQ-4.
+
+---
+
+### F-4 — `allFrames()` thread race — DOWNGRADED, latent not live
+**Phase 6 · Minor · verified 2026-08-02**
+
+Not a live defect. `EnrollmentCamera` posts `ingest` and `noteFaceLost` to the
+main executor (`mainExecutor.execute { ... }`), which is exactly the
+single-thread confinement `FaceCoverageModel`'s threading note requires, and
+`allFrames()` has no production caller at all — only tests.
+
+It stays open because the contract is load-bearing and invisible: the upload
+path that will call `allFrames()` has not been written, and if it reads from a
+background thread while the analyzer feeds the model, the race the reviewer
+described becomes real. The fix is to honour the confinement when that code
+lands, not to add a lock now. Belongs with F-10.
+
+---
+
+### F-6 — Five `FaceCoverageModel` divergences with no `DIFFERENCES.md` entry
+**Phase 6 · Minor–Important · not yet re-verified**
+
+Q2 records that the model ports 1:1. Reviewers found five places where it does
+not. Either they are justified and belong in `DIFFERENCES.md`, or they are
+parity bugs. Undocumented divergence in the one file whose whole premise is
+"this ports unchanged" is the problem regardless of which.
 
 ---
 
@@ -86,6 +122,474 @@ including the test suite, which can only test code that exists.
 **The remedy is not to port these four now.** It is that the parity gate has to
 include a checklist derived from the iOS file list rather than from mine.
 `PARITY.md` §29 lists behaviours; nothing lists *files*.
+
+---
+
+### F-17 — The data-collection consent record has no version, and six smaller gaps
+**Product / backend · Important · raised 2026-08-02 while porting the sheet**
+
+`DataCollectionConsentSheet` is now ported verbatim and wired. Porting it
+surfaced seven things about the *consent design itself*. **None were changed** —
+they are product and backend decisions, and a port is the wrong place to make
+them. They are recorded because a port is a good place to notice them.
+
+**1. No consent version is stored, and this is the one that matters.** The
+decision is persisted as a boolean plus a `decided_at` timestamp. The ToS and
+privacy gate stores a version string (`"2026-07-26-placeholder"`); this does
+not. **If the wording ever changes, there is no record of which text any given
+caregiver agreed to.** Under DPDP, consent is to a stated purpose — a consent
+record that cannot reproduce the purpose it was given for is weak evidence at
+best. Both platforms are affected equally; it is a schema question, not an
+Android one.
+
+The other six, in the sheet's own copy or behaviour:
+
+2. No retention period, no purpose limit beyond "improve our understanding of
+   elderly health and disease", and nothing about what happens to already-stored
+   clips when the caregiver turns it off. "You can turn it off anytime" is
+   forward-looking only.
+3. Consent is captured from the **caregiver** alone. The person being recorded
+   is never named as a consenting party.
+4. "you can turn it off anytime in Settings" is shown to someone for whom
+   nothing is on yet, so it reads as though collection has already begun.
+5. The sheet promises "video and audio clips" unconditionally, but the audio
+   capture card can sever audio at the source, so the audio half may be untrue
+   for a given patient.
+6. While a decision is in flight both buttons are inert but visually unchanged,
+   and there is no spinner. Faithful to iOS — `NemaraButton` deliberately does
+   not dim when disabled — but on a slow network a caregiver taps "Share
+   recordings" and nothing appears to happen.
+7. The error line renders `ApiError.errorDescription` verbatim, i.e.
+   server-authored text inside a consent surface.
+
+**What the port does get right, and deliberately:** a swipe-away sends nothing.
+iOS presents the sheet without `interactiveDismissDisabled`, so dismissal is
+possible and means the absence of an answer — `decided_at` stays null and the
+server default stays off. The Android host passes
+`onDismissRequest = dismissDataCollectionConsent` and **not** `onDecide(false)`,
+because recording "no" for someone who only swiped is still recording a decision
+they did not make.
+
+---
+
+### F-20 — A duplicate status bar renders at the bottom of the support screen
+**Integration · Minor · OPEN, cause not identified**
+
+With `SupportContactScreen` on screen, a strip carrying the status-bar icons
+(wifi, signal, battery and a clock glyph) is drawn near the BOTTOM of the
+window, just above the navigation bar. Reproduced twice, two seconds apart. It
+is gone the moment Cancel returns to Settings, and no other screen shows it, so
+it tracks this screen rather than the device.
+
+**Not diagnosed.** The plausible causes are an inset the screen consumes
+differently from every other full-surface screen, or a Compose window-inset
+interaction with the way it is presented over `MainShell` rather than as a
+route. I stopped short of guessing further because the fix depends on which.
+
+Cosmetic and non-blocking — the screen is usable, its fields and both actions
+work, and Cancel exits correctly — but it is exactly the kind of thing a
+screenshot parity pass exists to catch, and it should be understood rather than
+nudged until it disappears.
+
+---
+
+### F-21 — Storage URLs cannot serve the emulator and a real device from one value
+**Environment · Important · OPEN, not an app defect**
+
+REQ-22 is wired: `LocalAvatarPhoto` now has a provider (Coil, declared at the app
+layer so the design system still owns no image dependency, per D8). Verified
+server-side end to end — a photo uploads, `photo_storage_key` is set, and
+`GET /photo-url` returns a signed URL that fetches **200 from the host**.
+
+It still does not render on the emulator, and the reason is the environment, not
+the code:
+
+- The app reaches the backend at **`10.0.2.2:8002`** — the emulator's alias for
+  the host. That works.
+- The backend builds signed storage URLs from `NEMARA_SUPABASE_URL`, which must
+  be the host's **LAN IP** (`10.0.0.248`) so that a *real* device can fetch them.
+  It is split-horizon: the container calls Supabase with it AND hands it to
+  clients.
+- `10.0.2.2` is meaningful only inside the emulator; the LAN IP is meaningful
+  only outside it. **One value cannot satisfy both.**
+
+The avatar degrades to its serif initial, which is the `.failure` branch of
+iOS's `AsyncImage` — so the behaviour is right even though the image is absent.
+
+**Not hacked around.** A debug-only rewrite of the storage host to `10.0.2.2`
+would make the emulator work and is defensible, but it is a real design decision
+about dev configuration, so it is Aryaman's call rather than mine. The
+alternative is to verify photos on a physical device, alongside REQ-1/REQ-2
+which need one anyway.
+
+Until then: **no avatar photo can be confirmed rendering on the emulator**, and
+REQ-22 should be read as "wired, server side proven, client side unproven".
+
+---
+
+### F-28 — Analytics is discarded, and the coverage gate has the hole it was built to close
+**Phase 8 · Important · OPEN**
+
+`MainActivity` provides `NoOpAnalytics`. There is no counterpart to
+`Services/Analytics.swift` (295 lines: buffering, disk persistence, hourly
+flush, batch insert, caregiver-id stamping, an enabled kill switch). **All 16
+production call sites reach the bin**, and `logLifecycle` has zero callers where
+iOS logs `app_launch` / `app_foreground` / `app_background`.
+
+**Why the coverage gate missed it, which matters more than the finding:**
+`HARNESS.md` §4c globs only `NemaraCaregiver/Features` and `NemaraCaregiver/App`.
+`Services/`, `Models/`, `Networking/` and `DesignSystem/` are **never swept** —
+exactly where `Analytics.swift`, `AnalyticsView.swift` and `WanderingDoorCache`
+live. The gate written to catch missing files has the same blind spot that
+produced them.
+
+---
+
+### F-34 — Parity deltas from comparing captured screens
+**Parity · Minor unless noted · OPEN**
+
+Running log of differences found by putting the two captures side by side. The
+harness (`scratchpad/ios-parity/run.sh`) has all nine iOS screens; Android
+equivalents are in `scratchpad/shots/`.
+
+**Roster — both fixed, see F-22:** the support button was missing entirely, and
+the selected tab was Ink instead of Terra with a Material pill iOS does not draw.
+
+**Detectors — content is byte-for-byte what iOS shows.** Same four detectors,
+same descriptions, same `All rooms · Always` chips, same `4 ACTIVE` count, the
+same wandering "Not active yet" notice and the same medication accuracy caveat.
+Three deltas:
+
+1. **The Detectors tab glyph is missing its emitter dot.** iOS's
+   `sensor.tag.radiowaves.forward.fill` is a filled dot with arcs radiating from
+   it; mine draws the arcs only, so it reads as a bracket rather than a sensor.
+   My own simplification, noted in `TabGlyphs.kt` as "the readable core" — seeing
+   it beside the original, the dot is the part that makes it legible.
+2. **The Events tab glyph is a single zigzag where iOS draws a multi-peak
+   waveform.** `waveform.path` on iOS has many short peaks; mine has one large
+   one, so at a glance it reads as a chart rather than audio.
+3. **The patient avatar looked letter-less on iOS — RESOLVED, not a difference.**
+   `NemaraAvatar.swift` always draws `initialsBackground` (circle plus letter)
+   and overlays the `AsyncImage`, which is `Color.clear` on both `.empty` and
+   `.failure`. So the letter stays visible on iOS exactly as Android's doc
+   claims. The iOS capture looked empty because iOS **loaded the photo** — and
+   the photo I uploaded for testing was a downscaled screenshot of the mostly
+   beige Welcome screen, so it rendered as a beige circle.
+
+   This confirms F-21 a second way: the iOS simulator shares the host network and
+   resolves the LAN-IP storage URL; the Android emulator cannot. **Nothing to
+   fix in the avatar.** Recording it because "iOS shows no letter" was a
+   plausible-looking parity bug that would have cost someone a day.
+
+Six screens are captured and not yet compared: welcome, login, app settings,
+patient live, patient events, patient sensors.
+
+---
+
+### F-36 — Two host tests are flaky, independent of any recent change
+**Integration · Minor · OPEN**
+
+Full runs intermittently fail one of `NewPatientHostTest` / `AuthNavHostTest`;
+each passes in isolation. Confirmed pre-existing: reverting the recent
+onboarding/detector files and running `NewPatientHostTest` five times still
+failed roughly one in five. Cause looks like mock-backend and real-file-I/O
+races. Recorded rather than absorbed, because a suite that fails one run in five
+teaches people to re-run instead of read.
+
+---
+
+
+
+80 `clickable` call sites in `ui/`; 15 declare a `contentDescription`; exactly
+**one** declares a `role` — the `Role.Switch` from the F-18 fix. Every tappable
+label iOS builds as a `Button` announces to TalkBack as unlabelled clickable
+text with no button trait: settings rows, Enroll, Send test email, the roster
+`+`, the events banner dismiss, both back chevrons. F-18 fixed toggle *state*;
+this is the same shape one layer up, for control *identity*.
+
+Ten further sub-44dp targets beyond F-15 I-6, including a **12dp** events-banner
+dismiss and the 20dp roster `+` whose own comment says "the glyph IS the tap
+target, as on iOS" — which is the reasoning F-15 I-6 already rejected.
+
+Also: **no field in the app is offered to a password manager.** `NemaraField`
+sets `KeyboardType.Password` and `semantics { password() }` but never
+`ContentType.Password` / `ContentType.EmailAddress`, and Android autofill will
+not offer a Compose `BasicTextField` without them. iOS gets it free from
+`SecureField`. For a population that skews older and uses generated passwords,
+that is a sign-in failure.
+
+---
+
+## RESOLVED
+
+### F-8 — Regenerate the lost findings
+**Process · Important · CLOSED 2026-08-02**
+
+A fresh adversarial pass over phases 3, 5, 7 and 8 was run against the tree and
+written straight into this file — six Criticals and thirteen Importants, recorded
+as F-23 through F-32. Not a recall of the lost list; a new one, which is the only
+honest way to regenerate it.
+
+**Original entry, for the record:**
+
+A fresh review pass over Phases 3, 5, 7 and 8 against the tree, reviewing into
+this file rather than into conversation. Not a re-run of the old reviews — a
+new one, since the code has moved.
+
+---
+
+### F-10 — 21 of 24 screens are unreachable; the app is parts, not a product
+**All phases · Critical · CLOSED 2026-08-03**
+
+Every screen is now reachable and eight destinations were walked on a device
+(F-32). `api.bootstrap()` and `teardown()` are wired, `DeepLinkRouter` drives the
+patient presenter and the recovery link, and the ViewModels exist for every
+feature family. What remains is not reachability: `onPrivacy` has no screen to
+reach (F-14), and the Live tab needs LiveKit in the graph.
+
+**Original entry, for the record:**
+
+The only navigation graph is `AuthNavHost`: Welcome, Login, ForgotPassword.
+Signing in lands on `SignedInPlaceholder`. Roster, live video, events, cameras,
+detectors, settings, enrollment and onboarding are all built, all tested, and
+all unreachable.
+
+Behind it:
+
+- **One ViewModel exists** (`AuthViewModel`). The other 21 screens are pure
+  composables over state types with no producer — nothing fetches a roster,
+  subscribes a Realtime channel, or mints a LiveKit token in response to a tap.
+- `api.bootstrap()` and `api.teardown()` are still `TODO(phase-3)` in
+  `AppEnvironment`, so sign-in reaches `POST /v1/me` and stops.
+- `DeepLinkRouter` is written, tested, and referenced by nothing.
+
+**Failure guarded:** "all eight phases have code" and "the app works" are very
+different statements, and the test suite cannot tell them apart — 1466 tests
+pass against an app whose every feature screen is dead code. Every parity defect
+that only appears when a screen meets real data is still ahead of us, not
+behind.
+
+Not a defect in any one unit, which is why no per-phase review raised it. It is
+the largest single piece of work remaining.
+
+---
+
+### F-11 — The API client implements 2 endpoints out of ~26; F-10 understated the gap
+**All phases · Critical · CLOSED 2026-08-02**
+
+Six resource families ported and independently re-verified by a later review:
+`CamerasApi` (13 methods), `DetectorsApi` (8), `PatientsApi` (9), plus events,
+LiveKit and enrollment — every iOS family checked, with every cache side effect
+matching line for line, and 14 tests aimed specifically at the effects the
+six-file split endangered (I-7).
+
+**Original entry, for the record:**
+
+`NemaraApiClient` has five methods against `/v1/me` and `/v1/support`. The iOS
+`NemaraAPIClient.swift` is **1528 lines with ~60 public methods** across eight
+resource families. Missing entirely:
+
+| Family | iOS methods | Android |
+|---|---|---|
+| patients (incl. photo upload/URL/delete, test email) | 8 | 0 |
+| cameras (pairing, discovery, provisioning, wandering doors) | 13 | 0 |
+| detectors (infer, refine, library) | 9 | 0 |
+| events (paging, clip URL, review) | 5 | 0 |
+| LiveKit (tokens, talk start/end, clip record) | 6 | 0 |
+| face embeddings | 4 | 0 |
+| device tokens, feedback | 3 | 0 |
+| lifecycle (bootstrap / refresh / teardown / resync) | 6 | 0 |
+
+**This is why F-10 is not merely a wiring job.** A ViewModel cannot be written
+against endpoints that do not exist, so the missing API layer sits underneath
+every screen that is unreachable. `RealtimeStore`, `CameraStatePoller` and the
+four channel handlers are all built and tested against `RealtimeCache` — an
+interface `NemaraApiClient` is documented to implement and does not.
+
+The contract is already written and does not need designing: `RealtimePorts.kt`
+specifies the cache shape, the sort orders and the single-threaded confinement,
+and `PARITY.md` §10 forbids splitting it into repository + store.
+
+---
+
+### F-16 — I committed a deliberate test mutation into main source
+**Process · Critical (caught) · CLOSED 2026-08-02**
+
+Reverted the same day, and the rule it produced — never `git add -A` while agents
+are running — has been followed since; every commit after it stages explicitly.
+
+**Original entry, for the record:**
+
+Commit `58ba95a` used `git add -A` while an agent was mid mutation-test, and
+captured `PatientDetectorsUiState.kt` with its M1 mutation applied:
+
+```kotlin
+val customs: List<Detector>
+    get() = detectors.filter { it.source == Detector.Source.PRESET }   // was CUSTOM
+```
+
+Every detector would have been listed under **both** BUILT-IN and CUSTOM. It is
+plainly visible on screen, so it would not have survived long — but it was in a
+commit, it was in a green suite, and the only reason it did not stay there is
+that the agent reported it in its own write-up. **I did not notice, and no gate
+would have.** The agent's tests passed because it had already restored the file
+in its working tree; `git add -A` picked up the wrong moment, not the wrong file.
+
+**The rule this establishes:** never `git add -A` while agents are running.
+Stage explicitly, or wait for every agent to report. Mutation testing means
+main-source files are deliberately broken for seconds at a time, and a blanket
+stage is a coin flip over that window.
+
+Related: the same window produced repeated Gradle failures from several agents
+running `testDebugUnitTest` against one shared build directory
+(`~/.gradle-builds/memoria-caregiver-android`), which surface as
+`EOFException` or `NoSuchFileException: in-progress-results-generic.bin` and
+report a stale summary. Not a code defect, but it makes "the suite is green"
+unreliable exactly when several agents are finishing at once.
+
+---
+
+### F-1 — Two loudspeaker implementations, at two layers, with contradictory rules
+**Phase 4 · Important · FIXED 2026-08-02**
+
+Collapsed to one implementation, in `LiveKitClient.setMicrophoneEnabled`, which
+every mic publish goes through. The surviving rule is the headset-aware one. The
+decision is extracted to `data/livekit/AudioRouting.kt` as a pure function so it
+stays testable behind a live `Room`, and pinned by `AudioRoutingTest` — the
+headset case now has a test for the first time; neither original copy had one.
+`TalkAudioRoute`, `AudioSwitchTalkAudioRoute` and `TalkController`'s `audioRoute`
+parameter are deleted. Recorded as DECISIONS.md D-014.
+
+---
+
+### F-2 — Two copies of the LiveKit identity and room strings
+**Phase 4 · Important · FIXED 2026-08-02**
+
+`LiveKitTokens` deleted; `LiveKitIdentity` is the single definition and now also
+carries the two role strings. Both lowercase calls name `Locale.ROOT`, pinned by
+a test that runs under a Turkish default locale.
+
+**Correction, later the same day.** I described the two copies' differing
+lowercase spellings as a latent default-locale bug. That was wrong: Kotlin's
+no-argument `lowercase()` already uses `Locale.ROOT` — it is what replaced
+`toLowerCase()`, which did use the device locale. The spellings were always
+equivalent, naming the locale is documentation rather than a fix, and the test
+guards a stdlib guarantee rather than one this code adds. The duplication was
+real; that one detail of the diagnosis was not.
+
+The three duplicate tests in
+`TalkModeTest` went away with the copy they asserted against.
+
+---
+
+### F-5 — `EnrollmentCoverageSink` has no implementation, so the camera cannot be built
+**Phase 6 · Important · FIXED 2026-08-02**
+
+`ui/enrollment/FaceCoverageModelSink.kt` joins the two halves. Two signature
+differences, neither losing anything: the model takes a lazy `() -> ByteArray?`
+so it can decline to pay for an encode, but `EnrollmentCamera` has already made
+exactly that decision one step earlier, so wrapping the value re-satisfies the
+shape without encoding twice; and the model's `ingest` return value is discarded
+because the screen renders `model.state`, which already reflects the capture.
+
+The model deliberately still does not declare the interface itself — it lives in
+`data/enrollment/` and its header promises no camera, UI or ML Kit dependency,
+which is what lets it be tested against recorded poses with no Android on the
+path.
+
+Five tests, four mutations, all four caught (see the harness note in
+`HARNESS.md` §4d — the first run of those mutations produced four FALSE
+"survived" results).
+
+**Original entry, for the record:**
+
+More precise than reported. The sink is not "unwired" — `EnrollmentCamera`
+takes one as a constructor parameter and calls it correctly. The problem is that
+**nothing anywhere implements the interface**, in `main` or in test.
+`FaceCoverageModel` has all three matching methods and does not declare the
+interface, so the two halves were built to meet and never joined.
+
+`EnrollmentCamera` therefore cannot be constructed, which means face enrollment
+cannot run. Exactly the shape of H-12 (`PersonDetector`) and D8: every part real
+and tested, the seam between them missing. The adapter is a few lines; that it
+is absent is what F-10 is about.
+
+---
+
+### F-7 — The render watchdog has no `DIFFERENCES.md` entry
+**Phase 4 · Minor · FIXED 2026-08-02**
+
+Written up as `DIFFERENCES.md` D14: the counting `VideoSink` that substitutes
+for iOS's `VideoView.isRendering`, and the lifecycle scoping that substitutes
+for a `Timer` that stops firing when the app suspends. The source comments were
+already thorough — the entry was the missing part, and `PARITY.md` §12 requires
+it because only the intent ports.
+
+---
+
+### F-9 — Dead date formatters left behind by the codec collapse
+**Phase 2 · FIXED 2026-08-02**
+
+Deleting the forked `MiscInstantSerializer` left its five formatters
+(`MICROSECOND_ISO8601`, `FRACTIONAL_ISO8601`, `PLAIN_ISO8601`, `DATE_ONLY`,
+`OFFSET_PARSERS`) behind in `data/model/MiscModels.kt`, unreferenced. Private,
+so they could not drift back into use, but stale code in the very commit whose
+purpose was removing the fork. Deleted.
+### F-12 — Concurrent detector loads dropped a patient's whole list
+**Integration · Critical · FIXED 2026-08-02, found by a test**
+
+`loadDetectors` was written as a single expression:
+
+```kotlin
+detectorsByPatient = detectorsByPatient + (patientId to detectorsApi.loadDetectors(patientId))
+```
+
+Kotlin evaluates the left operand first, so the map is **read before the fetch
+suspends**. `bootstrap()` loads every patient concurrently, so with two patients
+both coroutines read the same pre-fetch map and the second write erased the
+first: **a caregiver with two patients saw one of them with no detectors at
+all** — no error, no empty state, just a household with its monitoring silently
+missing.
+
+Single-threaded confinement does not prevent this, which is the part worth
+remembering. The client's own comment says "single-threaded by contract", and
+that is true and still insufficient: a suspension point between the read and the
+write is an interleaving point even on one thread. `loadCameras` and
+`loadEventsFirstPage` happened to be safe only because they hoist the fetch into
+a local first.
+
+Fixed by hoisting. I then scanned every cache assignment for the same shape —
+`patients = patientsApi.loadPatients()` is a whole-value replacement with no read
+on the right, so `loadDetectors` was the only instance.
+
+**Found by the cache tests, not by review.** I wrote this code, read it back
+while writing the commit message that described the single-threaded contract,
+and did not see it. It is the first defect in this port caught by a test rather
+than by a person.
+
+---
+
+### F-13 — The main tab bar is text-only where iOS shows icon + label
+**Integration · Minor · FIXED 2026-08-02**
+
+Both bars now render icon + label, as `Label(title, systemImage:)` does. Six SF
+Symbols drawn as vectors in `ui/nav/TabGlyphs.kt` — `house.fill`, `gearshape`,
+`video.fill`, `waveform.path`, `camera.fill` and
+`sensor.tag.radiowaves.forward.fill`. The last two are simplified to the part
+that reads at 24dp; the full symbols close up to noise at tab-bar size, which is
+noted at each one.
+
+**Original entry, for the record:**
+
+`MainShell`'s `NavigationBar` renders each tab's title as the *icon* slot with
+no label, so the bar reads as two text pills. iOS uses
+`Label("Home", systemImage: "house.fill")` and
+`Label("Settings", systemImage: "gearshape")` — an icon above a label.
+
+Not a discovery; I wrote it that way to get the shell standing and did not want
+it to pass unrecorded, because it looks deliberate on screen. The two glyphs
+need drawing the way `PatientGlyphs.kt` draws `house.fill`, and one of them
+already exists there.
 
 ---
 
@@ -168,85 +672,6 @@ tab bar to Home because `rememberSaveable` sat below the early return).
 
 ---
 
-### F-16 — I committed a deliberate test mutation into main source
-**Process · Critical (caught) · 2026-08-02**
-
-Commit `58ba95a` used `git add -A` while an agent was mid mutation-test, and
-captured `PatientDetectorsUiState.kt` with its M1 mutation applied:
-
-```kotlin
-val customs: List<Detector>
-    get() = detectors.filter { it.source == Detector.Source.PRESET }   // was CUSTOM
-```
-
-Every detector would have been listed under **both** BUILT-IN and CUSTOM. It is
-plainly visible on screen, so it would not have survived long — but it was in a
-commit, it was in a green suite, and the only reason it did not stay there is
-that the agent reported it in its own write-up. **I did not notice, and no gate
-would have.** The agent's tests passed because it had already restored the file
-in its working tree; `git add -A` picked up the wrong moment, not the wrong file.
-
-**The rule this establishes:** never `git add -A` while agents are running.
-Stage explicitly, or wait for every agent to report. Mutation testing means
-main-source files are deliberately broken for seconds at a time, and a blanket
-stage is a coin flip over that window.
-
-Related: the same window produced repeated Gradle failures from several agents
-running `testDebugUnitTest` against one shared build directory
-(`~/.gradle-builds/memoria-caregiver-android`), which surface as
-`EOFException` or `NoSuchFileException: in-progress-results-generic.bin` and
-report a stale summary. Not a code defect, but it makes "the suite is green"
-unreliable exactly when several agents are finishing at once.
-
----
-
-### F-17 — The data-collection consent record has no version, and six smaller gaps
-**Product / backend · Important · raised 2026-08-02 while porting the sheet**
-
-`DataCollectionConsentSheet` is now ported verbatim and wired. Porting it
-surfaced seven things about the *consent design itself*. **None were changed** —
-they are product and backend decisions, and a port is the wrong place to make
-them. They are recorded because a port is a good place to notice them.
-
-**1. No consent version is stored, and this is the one that matters.** The
-decision is persisted as a boolean plus a `decided_at` timestamp. The ToS and
-privacy gate stores a version string (`"2026-07-26-placeholder"`); this does
-not. **If the wording ever changes, there is no record of which text any given
-caregiver agreed to.** Under DPDP, consent is to a stated purpose — a consent
-record that cannot reproduce the purpose it was given for is weak evidence at
-best. Both platforms are affected equally; it is a schema question, not an
-Android one.
-
-The other six, in the sheet's own copy or behaviour:
-
-2. No retention period, no purpose limit beyond "improve our understanding of
-   elderly health and disease", and nothing about what happens to already-stored
-   clips when the caregiver turns it off. "You can turn it off anytime" is
-   forward-looking only.
-3. Consent is captured from the **caregiver** alone. The person being recorded
-   is never named as a consenting party.
-4. "you can turn it off anytime in Settings" is shown to someone for whom
-   nothing is on yet, so it reads as though collection has already begun.
-5. The sheet promises "video and audio clips" unconditionally, but the audio
-   capture card can sever audio at the source, so the audio half may be untrue
-   for a given patient.
-6. While a decision is in flight both buttons are inert but visually unchanged,
-   and there is no spinner. Faithful to iOS — `NemaraButton` deliberately does
-   not dim when disabled — but on a slow network a caregiver taps "Share
-   recordings" and nothing appears to happen.
-7. The error line renders `ApiError.errorDescription` verbatim, i.e.
-   server-authored text inside a consent surface.
-
-**What the port does get right, and deliberately:** a swipe-away sends nothing.
-iOS presents the sheet without `interactiveDismissDisabled`, so dismissal is
-possible and means the absence of an answer — `decided_at` stays null and the
-server default stays off. The Android host passes
-`onDismissRequest = dismissDataCollectionConsent` and **not** `onDecide(false)`,
-because recording "no" for someone who only swiped is still recording a decision
-they did not make.
-
----
-
 ### F-18 — Every toggle in the app was invisible to a screen reader
 **Phase 1 · Important · FIXED 2026-08-02, found while testing the blur gate**
 
@@ -292,61 +717,6 @@ open; what is closed is the toggle lying about it.
 **The card had no tests at all before this.** That is how a privacy control's
 behaviour could have been changed, or the gate later removed, with a green suite
 either way.
-
----
-
-### F-20 — A duplicate status bar renders at the bottom of the support screen
-**Integration · Minor · OPEN, cause not identified**
-
-With `SupportContactScreen` on screen, a strip carrying the status-bar icons
-(wifi, signal, battery and a clock glyph) is drawn near the BOTTOM of the
-window, just above the navigation bar. Reproduced twice, two seconds apart. It
-is gone the moment Cancel returns to Settings, and no other screen shows it, so
-it tracks this screen rather than the device.
-
-**Not diagnosed.** The plausible causes are an inset the screen consumes
-differently from every other full-surface screen, or a Compose window-inset
-interaction with the way it is presented over `MainShell` rather than as a
-route. I stopped short of guessing further because the fix depends on which.
-
-Cosmetic and non-blocking — the screen is usable, its fields and both actions
-work, and Cancel exits correctly — but it is exactly the kind of thing a
-screenshot parity pass exists to catch, and it should be understood rather than
-nudged until it disappears.
-
----
-
-### F-21 — Storage URLs cannot serve the emulator and a real device from one value
-**Environment · Important · OPEN, not an app defect**
-
-REQ-22 is wired: `LocalAvatarPhoto` now has a provider (Coil, declared at the app
-layer so the design system still owns no image dependency, per D8). Verified
-server-side end to end — a photo uploads, `photo_storage_key` is set, and
-`GET /photo-url` returns a signed URL that fetches **200 from the host**.
-
-It still does not render on the emulator, and the reason is the environment, not
-the code:
-
-- The app reaches the backend at **`10.0.2.2:8002`** — the emulator's alias for
-  the host. That works.
-- The backend builds signed storage URLs from `NEMARA_SUPABASE_URL`, which must
-  be the host's **LAN IP** (`10.0.0.248`) so that a *real* device can fetch them.
-  It is split-horizon: the container calls Supabase with it AND hands it to
-  clients.
-- `10.0.2.2` is meaningful only inside the emulator; the LAN IP is meaningful
-  only outside it. **One value cannot satisfy both.**
-
-The avatar degrades to its serif initial, which is the `.failure` branch of
-iOS's `AsyncImage` — so the behaviour is right even though the image is absent.
-
-**Not hacked around.** A debug-only rewrite of the storage host to `10.0.2.2`
-would make the emulator work and is defensible, but it is a real design decision
-about dev configuration, so it is Aryaman's call rather than mine. The
-alternative is to verify photos on a physical device, alongside REQ-1/REQ-2
-which need one anyway.
-
-Until then: **no avatar photo can be confirmed rendering on the emulator**, and
-REQ-22 should be read as "wired, server side proven, client side unproven".
 
 ---
 
@@ -573,24 +943,6 @@ enforced on backend, web and iOS **has no Android enforcement path at all.**
 
 ---
 
-### F-28 — Analytics is discarded, and the coverage gate has the hole it was built to close
-**Phase 8 · Important · OPEN**
-
-`MainActivity` provides `NoOpAnalytics`. There is no counterpart to
-`Services/Analytics.swift` (295 lines: buffering, disk persistence, hourly
-flush, batch insert, caregiver-id stamping, an enabled kill switch). **All 16
-production call sites reach the bin**, and `logLifecycle` has zero callers where
-iOS logs `app_launch` / `app_foreground` / `app_background`.
-
-**Why the coverage gate missed it, which matters more than the finding:**
-`HARNESS.md` §4c globs only `NemaraCaregiver/Features` and `NemaraCaregiver/App`.
-`Services/`, `Models/`, `Networking/` and `DesignSystem/` are **never swept** —
-exactly where `Analytics.swift`, `AnalyticsView.swift` and `WanderingDoorCache`
-live. The gate written to catch missing files has the same blind spot that
-produced them.
-
----
-
 ### F-29 — The events feed poll is not lifecycle-gated
 **Phase 3 · Important · FIXED 2026-08-03**
 
@@ -658,40 +1010,6 @@ a clickable ancestor, it fails loudly.
 states the intent explicitly, so it stays — but the reasoning that produced it
 was wrong, and "iOS gets 44pt free from UIKit, therefore Compose does not" was an
 assumption I never measured.
-
----
-
-### F-36 — Two host tests are flaky, independent of any recent change
-**Integration · Minor · OPEN**
-
-Full runs intermittently fail one of `NewPatientHostTest` / `AuthNavHostTest`;
-each passes in isolation. Confirmed pre-existing: reverting the recent
-onboarding/detector files and running `NewPatientHostTest` five times still
-failed roughly one in five. Cause looks like mock-backend and real-file-I/O
-races. Recorded rather than absorbed, because a suite that fails one run in five
-teaches people to re-run instead of read.
-
----
-
-
-
-80 `clickable` call sites in `ui/`; 15 declare a `contentDescription`; exactly
-**one** declares a `role` — the `Role.Switch` from the F-18 fix. Every tappable
-label iOS builds as a `Button` announces to TalkBack as unlabelled clickable
-text with no button trait: settings rows, Enroll, Send test email, the roster
-`+`, the events banner dismiss, both back chevrons. F-18 fixed toggle *state*;
-this is the same shape one layer up, for control *identity*.
-
-Ten further sub-44dp targets beyond F-15 I-6, including a **12dp** events-banner
-dismiss and the 20dp roster `+` whose own comment says "the glyph IS the tap
-target, as on iOS" — which is the reasoning F-15 I-6 already rejected.
-
-Also: **no field in the app is offered to a password manager.** `NemaraField`
-sets `KeyboardType.Password` and `semantics { password() }` but never
-`ContentType.Password` / `ContentType.EmailAddress`, and Android autofill will
-not offer a Compose `BasicTextField` without them. iOS gets it free from
-`SecureField`. For a population that skews older and uses generated passwords,
-that is a sign-in failure.
 
 ---
 
@@ -765,47 +1083,6 @@ the normal case for a care team — that is the moment they hand the phone over.
 
 ---
 
-### F-34 — Parity deltas from comparing captured screens
-**Parity · Minor unless noted · OPEN**
-
-Running log of differences found by putting the two captures side by side. The
-harness (`scratchpad/ios-parity/run.sh`) has all nine iOS screens; Android
-equivalents are in `scratchpad/shots/`.
-
-**Roster — both fixed, see F-22:** the support button was missing entirely, and
-the selected tab was Ink instead of Terra with a Material pill iOS does not draw.
-
-**Detectors — content is byte-for-byte what iOS shows.** Same four detectors,
-same descriptions, same `All rooms · Always` chips, same `4 ACTIVE` count, the
-same wandering "Not active yet" notice and the same medication accuracy caveat.
-Three deltas:
-
-1. **The Detectors tab glyph is missing its emitter dot.** iOS's
-   `sensor.tag.radiowaves.forward.fill` is a filled dot with arcs radiating from
-   it; mine draws the arcs only, so it reads as a bracket rather than a sensor.
-   My own simplification, noted in `TabGlyphs.kt` as "the readable core" — seeing
-   it beside the original, the dot is the part that makes it legible.
-2. **The Events tab glyph is a single zigzag where iOS draws a multi-peak
-   waveform.** `waveform.path` on iOS has many short peaks; mine has one large
-   one, so at a glance it reads as a chart rather than audio.
-3. **The patient avatar looked letter-less on iOS — RESOLVED, not a difference.**
-   `NemaraAvatar.swift` always draws `initialsBackground` (circle plus letter)
-   and overlays the `AsyncImage`, which is `Color.clear` on both `.empty` and
-   `.failure`. So the letter stays visible on iOS exactly as Android's doc
-   claims. The iOS capture looked empty because iOS **loaded the photo** — and
-   the photo I uploaded for testing was a downscaled screenshot of the mostly
-   beige Welcome screen, so it rendered as a beige circle.
-
-   This confirms F-21 a second way: the iOS simulator shares the host network and
-   resolves the LAN-IP storage URL; the Android emulator cannot. **Nothing to
-   fix in the avatar.** Recording it because "iOS shows no letter" was a
-   plausible-looking parity bug that would have cost someone a day.
-
-Six screens are captured and not yet compared: welcome, login, app settings,
-patient live, patient events, patient sensors.
-
----
-
 ### F-35 — RETRACTED: "Add a sensor" works; I tested the wrong binary
 **Integration · was Important · FALSE FINDING, retracted 2026-08-03**
 
@@ -835,252 +1112,3 @@ conclusion, which is what made the retraction cheap and unambiguous.
 
 ---
 
-### F-3 — Scene luma is measured on a different scale than iOS
-**Phase 6 · Important · CONFIRMED 2026-08-02 · needs a device to fix correctly**
-
-Enrollment reads brightness from the YUV luma plane, which is studio-swing
-(16–235) on most devices, where iOS applies a full-range Rec.601 weighting to
-BGRA. The same room therefore reports a **higher** luma on Android, and the
-`0.28` dark-luma floor that gates "too dark" guidance was calibrated against
-the iOS scale.
-
-**Failure guarded:** the too-dark warning fires late or not at all, so
-enrollment accepts frames in light iOS would have rejected — silently degrading
-the face gallery that everything downstream depends on.
-
-Related to REQ-18 / Q2, but distinct: that is about the *quality* metric, this
-is about *brightness*, which the port assumed transferred 1:1 and does not.
-
-**The arithmetic.** A scene iOS scores at exactly the 0.28 dark floor is luma
-71/255. The same scene on a studio-swing plane reads `16 + 0.28 x 219 = 77`, or
-0.30 — above the floor. The warning fires late, or never.
-
-**Verified in source.** `sceneLuma` in `ui/enrollment/EnrollmentFrameAnalysis.kt`
-divides the raw plane value by 255. The comment above it addressed the Rec.601
-*weighting* (which genuinely does transfer) and said nothing about *range*,
-which is the half that does not — so the code read as checked when it was not.
-That comment now states the gap.
-
-**Deliberately not fixed blind.** `(y - 16) / 219` is right only if the plane is
-studio-swing, and Android exposes no API for which range a device emits.
-Applying it unconditionally trades this error for a comparable one on
-full-range devices. Pointing a camera at a known target settles it in minutes.
-Folded into REQ-4.
-
----
-
-### F-4 — `allFrames()` thread race — DOWNGRADED, latent not live
-**Phase 6 · Minor · verified 2026-08-02**
-
-Not a live defect. `EnrollmentCamera` posts `ingest` and `noteFaceLost` to the
-main executor (`mainExecutor.execute { ... }`), which is exactly the
-single-thread confinement `FaceCoverageModel`'s threading note requires, and
-`allFrames()` has no production caller at all — only tests.
-
-It stays open because the contract is load-bearing and invisible: the upload
-path that will call `allFrames()` has not been written, and if it reads from a
-background thread while the analyzer feeds the model, the race the reviewer
-described becomes real. The fix is to honour the confinement when that code
-lands, not to add a lock now. Belongs with F-10.
-
----
-
-### F-5 — `EnrollmentCoverageSink` has no implementation, so the camera cannot be built
-**Phase 6 · Important · FIXED 2026-08-02**
-
-`ui/enrollment/FaceCoverageModelSink.kt` joins the two halves. Two signature
-differences, neither losing anything: the model takes a lazy `() -> ByteArray?`
-so it can decline to pay for an encode, but `EnrollmentCamera` has already made
-exactly that decision one step earlier, so wrapping the value re-satisfies the
-shape without encoding twice; and the model's `ingest` return value is discarded
-because the screen renders `model.state`, which already reflects the capture.
-
-The model deliberately still does not declare the interface itself — it lives in
-`data/enrollment/` and its header promises no camera, UI or ML Kit dependency,
-which is what lets it be tested against recorded poses with no Android on the
-path.
-
-Five tests, four mutations, all four caught (see the harness note in
-`HARNESS.md` §4d — the first run of those mutations produced four FALSE
-"survived" results).
-
-**Original entry, for the record:**
-
-More precise than reported. The sink is not "unwired" — `EnrollmentCamera`
-takes one as a constructor parameter and calls it correctly. The problem is that
-**nothing anywhere implements the interface**, in `main` or in test.
-`FaceCoverageModel` has all three matching methods and does not declare the
-interface, so the two halves were built to meet and never joined.
-
-`EnrollmentCamera` therefore cannot be constructed, which means face enrollment
-cannot run. Exactly the shape of H-12 (`PersonDetector`) and D8: every part real
-and tested, the seam between them missing. The adapter is a few lines; that it
-is absent is what F-10 is about.
-
----
-
-### F-6 — Five `FaceCoverageModel` divergences with no `DIFFERENCES.md` entry
-**Phase 6 · Minor–Important · not yet re-verified**
-
-Q2 records that the model ports 1:1. Reviewers found five places where it does
-not. Either they are justified and belong in `DIFFERENCES.md`, or they are
-parity bugs. Undocumented divergence in the one file whose whole premise is
-"this ports unchanged" is the problem regardless of which.
-
----
-
-### F-8 — Regenerate the lost findings
-**Process · Important**
-
-A fresh review pass over Phases 3, 5, 7 and 8 against the tree, reviewing into
-this file rather than into conversation. Not a re-run of the old reviews — a
-new one, since the code has moved.
-
----
-
-### F-10 — 21 of 24 screens are unreachable; the app is parts, not a product
-**All phases · Critical · verified 2026-08-02**
-
-The only navigation graph is `AuthNavHost`: Welcome, Login, ForgotPassword.
-Signing in lands on `SignedInPlaceholder`. Roster, live video, events, cameras,
-detectors, settings, enrollment and onboarding are all built, all tested, and
-all unreachable.
-
-Behind it:
-
-- **One ViewModel exists** (`AuthViewModel`). The other 21 screens are pure
-  composables over state types with no producer — nothing fetches a roster,
-  subscribes a Realtime channel, or mints a LiveKit token in response to a tap.
-- `api.bootstrap()` and `api.teardown()` are still `TODO(phase-3)` in
-  `AppEnvironment`, so sign-in reaches `POST /v1/me` and stops.
-- `DeepLinkRouter` is written, tested, and referenced by nothing.
-
-**Failure guarded:** "all eight phases have code" and "the app works" are very
-different statements, and the test suite cannot tell them apart — 1466 tests
-pass against an app whose every feature screen is dead code. Every parity defect
-that only appears when a screen meets real data is still ahead of us, not
-behind.
-
-Not a defect in any one unit, which is why no per-phase review raised it. It is
-the largest single piece of work remaining.
-
----
-
-### F-11 — The API client implements 2 endpoints out of ~26; F-10 understated the gap
-**All phases · Critical · verified 2026-08-02**
-
-`NemaraApiClient` has five methods against `/v1/me` and `/v1/support`. The iOS
-`NemaraAPIClient.swift` is **1528 lines with ~60 public methods** across eight
-resource families. Missing entirely:
-
-| Family | iOS methods | Android |
-|---|---|---|
-| patients (incl. photo upload/URL/delete, test email) | 8 | 0 |
-| cameras (pairing, discovery, provisioning, wandering doors) | 13 | 0 |
-| detectors (infer, refine, library) | 9 | 0 |
-| events (paging, clip URL, review) | 5 | 0 |
-| LiveKit (tokens, talk start/end, clip record) | 6 | 0 |
-| face embeddings | 4 | 0 |
-| device tokens, feedback | 3 | 0 |
-| lifecycle (bootstrap / refresh / teardown / resync) | 6 | 0 |
-
-**This is why F-10 is not merely a wiring job.** A ViewModel cannot be written
-against endpoints that do not exist, so the missing API layer sits underneath
-every screen that is unreachable. `RealtimeStore`, `CameraStatePoller` and the
-four channel handlers are all built and tested against `RealtimeCache` — an
-interface `NemaraApiClient` is documented to implement and does not.
-
-The contract is already written and does not need designing: `RealtimePorts.kt`
-specifies the cache shape, the sort orders and the single-threaded confinement,
-and `PARITY.md` §10 forbids splitting it into repository + store.
-
----
-
-### F-12 — Concurrent detector loads dropped a patient's whole list
-**Integration · Critical · FIXED 2026-08-02, found by a test**
-
-`loadDetectors` was written as a single expression:
-
-```kotlin
-detectorsByPatient = detectorsByPatient + (patientId to detectorsApi.loadDetectors(patientId))
-```
-
-Kotlin evaluates the left operand first, so the map is **read before the fetch
-suspends**. `bootstrap()` loads every patient concurrently, so with two patients
-both coroutines read the same pre-fetch map and the second write erased the
-first: **a caregiver with two patients saw one of them with no detectors at
-all** — no error, no empty state, just a household with its monitoring silently
-missing.
-
-Single-threaded confinement does not prevent this, which is the part worth
-remembering. The client's own comment says "single-threaded by contract", and
-that is true and still insufficient: a suspension point between the read and the
-write is an interleaving point even on one thread. `loadCameras` and
-`loadEventsFirstPage` happened to be safe only because they hoist the fetch into
-a local first.
-
-Fixed by hoisting. I then scanned every cache assignment for the same shape —
-`patients = patientsApi.loadPatients()` is a whole-value replacement with no read
-on the right, so `loadDetectors` was the only instance.
-
-**Found by the cache tests, not by review.** I wrote this code, read it back
-while writing the commit message that described the single-threaded contract,
-and did not see it. It is the first defect in this port caught by a test rather
-than by a person.
-
----
-
-## RESOLVED
-
-### F-7 — The render watchdog has no `DIFFERENCES.md` entry
-**Phase 4 · Minor · FIXED 2026-08-02**
-
-Written up as `DIFFERENCES.md` D14: the counting `VideoSink` that substitutes
-for iOS's `VideoView.isRendering`, and the lifecycle scoping that substitutes
-for a `Timer` that stops firing when the app suspends. The source comments were
-already thorough — the entry was the missing part, and `PARITY.md` §12 requires
-it because only the intent ports.
-
----
-
-### F-1 — Two loudspeaker implementations, at two layers, with contradictory rules
-**Phase 4 · Important · FIXED 2026-08-02**
-
-Collapsed to one implementation, in `LiveKitClient.setMicrophoneEnabled`, which
-every mic publish goes through. The surviving rule is the headset-aware one. The
-decision is extracted to `data/livekit/AudioRouting.kt` as a pure function so it
-stays testable behind a live `Room`, and pinned by `AudioRoutingTest` — the
-headset case now has a test for the first time; neither original copy had one.
-`TalkAudioRoute`, `AudioSwitchTalkAudioRoute` and `TalkController`'s `audioRoute`
-parameter are deleted. Recorded as DECISIONS.md D-014.
-
----
-
-### F-2 — Two copies of the LiveKit identity and room strings
-**Phase 4 · Important · FIXED 2026-08-02**
-
-`LiveKitTokens` deleted; `LiveKitIdentity` is the single definition and now also
-carries the two role strings. Both lowercase calls name `Locale.ROOT`, pinned by
-a test that runs under a Turkish default locale.
-
-**Correction, later the same day.** I described the two copies' differing
-lowercase spellings as a latent default-locale bug. That was wrong: Kotlin's
-no-argument `lowercase()` already uses `Locale.ROOT` — it is what replaced
-`toLowerCase()`, which did use the device locale. The spellings were always
-equivalent, naming the locale is documentation rather than a fix, and the test
-guards a stdlib guarantee rather than one this code adds. The duplication was
-real; that one detail of the diagnosis was not.
-
-The three duplicate tests in
-`TalkModeTest` went away with the copy they asserted against.
-
----
-
-### F-9 — Dead date formatters left behind by the codec collapse
-**Phase 2 · FIXED 2026-08-02**
-
-Deleting the forked `MiscInstantSerializer` left its five formatters
-(`MICROSECOND_ISO8601`, `FRACTIONAL_ISO8601`, `PLAIN_ISO8601`, `DATE_ONLY`,
-`OFFSET_PARSERS`) behind in `data/model/MiscModels.kt`, unreferenced. Private,
-so they could not drift back into use, but stale code in the very commit whose
-purpose was removing the fork. Deleted.
