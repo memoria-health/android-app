@@ -452,9 +452,61 @@ the previous review, running the other way. Handlers added at all four levels.
 ---
 
 ### F-26 — Phase 7's push stack does not exist, and `nemara://` is dead
-**Phases 7 and 2 · Critical · OPEN**
+**Phases 7 and 2 · Critical · PUSH STILL OPEN · deep links FIXED 2026-08-03**
 
-Two separate holes, both verified absent across the whole tree.
+Two separate holes, both verified absent across the whole tree. **The deep-link
+half is fixed and verified on the emulator; the push half is untouched and this
+finding stays open for it.**
+
+#### Deep links — fixed 2026-08-03
+
+`nemara://reset-password?code=…` now resolves to `MainActivity`, and the code it
+carries reaches the reset screen. Scheme and host are taken from
+`AppConfig.supabasePasswordResetRedirect`, which is the address Supabase is
+actually told to send, and they match the iOS `CFBundleURLSchemes` entry in
+`project.yml`.
+
+- **Manifest.** A second intent filter with `VIEW` + `DEFAULT` + `BROWSABLE` and
+  `scheme="nemara" host="reset-password"`. `BROWSABLE` is what lets the link
+  start us from Gmail rather than only from another app.
+- **`launchMode="singleTop"`,** which is load-bearing rather than tidiness: under
+  the default mode a link tapped while the app is running starts a *second*
+  MainActivity, `onNewIntent` never fires, and the caregiver resets a password
+  inside a duplicate copy of the app. Confirmed on the emulator — a warm start
+  now reports *"intent has been delivered to currently running top-most
+  instance"* and the task still holds one `ActivityRecord`.
+- **Both entry paths.** Cold start reads `intent` in `onCreate`, guarded on
+  `savedInstanceState == null` so a configuration change cannot re-spend a
+  single-use code; warm start reads `onNewIntent` and calls `setIntent`.
+- **The screen is a cover, not a route** (DECISIONS.md D-015): a route argument
+  would put the recovery code in the back stack and therefore in the saved-state
+  Bundle. It is held in `AuthViewModel.reset` instead, cleared on close and on
+  success, and `ResetPasswordSession.toString()` is redacted so no log or crash
+  report can print it. The code is never passed into the composition and never
+  reaches an analytics label — the screen is reported as the constant
+  `"reset_password"`, matching iOS's `.trackScreen`.
+- **`BackHandler`,** because a cover is a conditional branch and nothing else
+  handles Back (F-25). Verified on the emulator: Back closes the reset screen and
+  lands on the welcome screen with the app still running.
+
+42 tests across `RecoveryLinkTest`, `ResetPasswordSessionTest`,
+`ResetPasswordViewModelTest` and `ResetPasswordDestinationTest`; suite 1843 →
+1885. `RecoveryLinkTest` asserts against the *merged manifest* through
+`PackageManager`, which is the only assertion that would have failed while this
+was broken — every test of the screen itself passed throughout.
+
+**One thing this exposed and did not fix:** when the link is opened on a device
+that did not request it (or after app data is cleared), there is no stored PKCE
+verifier and the screen shows the Supabase SDK's developer-facing sentence — *"No
+code verifier stored. Make sure to use `getOAuthUrl` for the OAuth Url to prepare
+the PKCE flow."* iOS has the same shape (`error.localizedDescription` for a
+non-`APIError`), so this is a parity-preserving bug, not an Android one. Left
+alone deliberately: the instruction is that error copy is the product's and is
+rendered verbatim. It needs a product decision, not a silent reword.
+
+#### Push — still open
+
+The original entry stands unchanged for this half.
 
 **Push.** No `firebase-messaging` or `google-services` dependency, no
 `FirebaseMessagingService`, no `google-services.json`, no `POST_NOTIFICATIONS`,
@@ -471,12 +523,13 @@ REQ-8 says retrieval and display are unblocked — so per `HARNESS.md` §4c this
 missing, not deferred. **The fall alert never arrives; the app is a viewer you
 must remember to open.**
 
-**Deep links.** `MainActivity` has only a MAIN/LAUNCHER intent filter — no
-`VIEW`/`BROWSABLE`/`scheme="nemara"`, no `onNewIntent`, no `intent.data` read.
-`AuthNavHost` has no `RESET_PASSWORD` destination and `AuthViewModel` has no
-reset methods, though `exchangeRecoveryCode` and `updatePassword` both exist and
-are tested and `ResetPasswordScreen` is 292 lines with no producer.
-**Password recovery is impossible on Android**: the email sends, the link opens
+**Deep links, as originally found (fixed above).** `MainActivity` had only a
+MAIN/LAUNCHER intent filter — no `VIEW`/`BROWSABLE`/`scheme="nemara"`, no
+`onNewIntent`, no `intent.data` read. `AuthNavHost` had no `RESET_PASSWORD`
+destination and `AuthViewModel` had no reset methods, though
+`exchangeRecoveryCode` and `updatePassword` both existed and were tested and
+`ResetPasswordScreen` was 292 lines with no producer.
+**Password recovery was impossible on Android**: the email sent, the link opened
 nothing.
 
 ---
@@ -677,6 +730,34 @@ Three deltas:
 
 Six screens are captured and not yet compared: welcome, login, app settings,
 patient live, patient events, patient sensors.
+
+---
+
+### F-35 — "Add a sensor" is wired and does nothing on the device
+**Integration · Important · OPEN, cause not identified**
+
+The F-32 work reported eleven of twelve callbacks as live. **At least one is not**,
+and it was found the first time I tapped it on the emulator.
+
+Evidence, gathered rather than assumed:
+- `CameraListScreen.kt:90` — `onClick = onAddSensor`.
+- `MainActivity.kt:517` — `onAddSensor = { destination = PatientDestination.AddSensor }`.
+- `MainActivity.kt:591` — `PatientDestination.AddSensor -> ModalOverlay { AddCameraHost(…) }`.
+- `uiautomator` reports a clickable node at `[42,567][1038,693]`; the tap was at
+  `(540, 630)`, inside it.
+- After the tap the view hierarchy is **unchanged** — same twelve text nodes — and
+  logcat shows no exception, fatal or otherwise.
+
+So the control is clickable, the tap lands inside it, the callback chain reads
+correctly, and no state change reaches the screen. I did not find the cause and
+am not guessing at one.
+
+**The lesson is bigger than the bug.** The agent's report was detailed, specific
+and confident — 36 mutations, all killed, 1917 tests green — and the first thing
+I tapped did not work. **A green suite plus a thorough write-up is not evidence
+that a screen is reachable.** Everything F-32 claims to have wired must be walked
+on a device before any of it is believed; only Sensors has been walked so far,
+and it failed.
 
 ---
 

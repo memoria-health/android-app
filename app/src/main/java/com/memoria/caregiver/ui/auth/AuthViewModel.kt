@@ -7,6 +7,7 @@ import com.memoria.caregiver.data.remote.ApiError
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
@@ -31,6 +32,21 @@ class AuthViewModel(private val auth: SupabaseAuthService) : ViewModel() {
 
     private val _forgot = MutableStateFlow(ForgotPasswordState())
     val forgot: StateFlow<ForgotPasswordState> = _forgot.asStateFlow()
+
+    /**
+     * The open password-recovery link, or `null` when there is none — which is
+     * also "do not show the reset screen".
+     *
+     * Held here rather than in a navigation argument because it carries the
+     * recovery code. A Navigation Compose route puts its arguments in the back
+     * stack entry, and the back stack is written into the Activity's saved-state
+     * Bundle; the code would then outlive its own use, on disk, for a screen
+     * whose entire job is to consume it once. A ViewModel field survives a
+     * configuration change (which is all it needs to survive) and dies with the
+     * process.
+     */
+    private val _reset = MutableStateFlow<ResetPasswordSession?>(null)
+    val reset: StateFlow<ResetPasswordSession?> = _reset.asStateFlow()
 
     val currentCaregiver = auth.currentCaregiver
 
@@ -168,6 +184,130 @@ class AuthViewModel(private val auth: SupabaseAuthService) : ViewModel() {
         }
     }
 
+    // ---- Reset password ----
+
+    /**
+     * A `nemara://reset-password?code=…` link was opened. Starts step 2, the
+     * exchange of the code for a recovery session, exactly as iOS's
+     * `ResetPasswordView.task { await exchange() }` does when the cover appears.
+     *
+     * @param code the recovery code from the link. **Never log this, and never
+     *   put it in an analytics label** — it is a credential that signs its
+     *   holder in.
+     */
+    fun onRecoveryLink(code: String) {
+        // A link already open is left alone. The same intent can arrive twice —
+        // an Activity re-created after a configuration change is handed its
+        // original intent again — and a recovery code is single-use, so a second
+        // exchange of one already spent would replace a working screen with an
+        // "expired link" one.
+        if (_reset.value != null) return
+
+        _reset.value = ResetPasswordSession(code = code)
+        viewModelScope.launch {
+            try {
+                val email = auth.exchangeRecoveryCode(code)
+                updateSession(code) {
+                    it.copy(
+                        isLinkValid = true,
+                        state = it.state.copy(email = email, isExchangingCode = false),
+                    )
+                }
+            } catch (e: Throwable) {
+                updateSession(code) {
+                    it.copy(
+                        state = it.state.copy(
+                            isExchangingCode = false,
+                            form = it.state.form.copy(errorMessage = messageFor(e)),
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    fun onResetPasswordChange(value: String) {
+        _reset.value = _reset.value?.let {
+            it.copy(state = it.state.copy(password = value, form = clearedError(it.state.form)))
+        }
+    }
+
+    fun onResetConfirmChange(value: String) {
+        _reset.value = _reset.value?.let {
+            it.copy(confirm = value, state = it.state.copy(form = clearedError(it.state.form)))
+        }
+    }
+
+    /**
+     * Step 3. Sets the new password, which also signs the caregiver in —
+     * `updatePassword` runs the same `onAuthenticated` provisioning as a normal
+     * sign-in, so `currentCaregiver` goes non-null and the host swaps to the
+     * signed-in app on its own.
+     */
+    fun submitPasswordReset() {
+        val session = _reset.value ?: return
+        // The same second lock as [submitLogin] and [submitSignUp]. The screen's
+        // button is disabled on the identical terms, and this is the other side
+        // of the same door.
+        if (!session.canSubmit) return
+
+        val password = session.state.password
+        _reset.value = session.copy(
+            state = session.state.copy(
+                form = session.state.form.copy(isBusy = true, errorMessage = null),
+            ),
+        )
+        viewModelScope.launch {
+            try {
+                auth.updatePassword(password)
+                // Dropping the session is what erases the recovery code, and it
+                // is also the dismissal: iOS calls `dismiss()` here for the same
+                // two reasons. Unconditional — the code is spent either way, so
+                // it must not linger even if something else opened a link since.
+                _reset.value = null
+            } catch (e: Throwable) {
+                updateSession(session.code) {
+                    it.copy(
+                        state = it.state.copy(
+                            form = it.state.form.copy(isBusy = false, errorMessage = messageFor(e)),
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * The caregiver closed the reset screen — "Close", or the system Back
+     * button. Drops the recovery code with it, so nothing is left holding a
+     * credential for a screen that is gone.
+     */
+    fun closePasswordReset() {
+        _reset.value = null
+    }
+
+    /**
+     * Write back to the session that is open **now**, and only if it is still
+     * the one whose result this is.
+     *
+     * Every caller here resumes after a suspending call, so the value read
+     * before the call may be stale by the time the answer arrives — the caregiver
+     * may have closed the screen, or opened a second link. Reading inside
+     * `update` rather than reusing the earlier snapshot is what keeps this from
+     * being a read-modify-write across a suspension point (FINDINGS.md F-12);
+     * matching on [code] is what stops one link's answer landing on another's
+     * screen. A session that has gone away stays gone: no `code` matches `null`,
+     * so a late answer cannot resurrect a credential that was cleared.
+     */
+    private fun updateSession(
+        code: String,
+        transform: (ResetPasswordSession) -> ResetPasswordSession,
+    ) {
+        _reset.update { current ->
+            if (current == null || current.code != code) current else transform(current)
+        }
+    }
+
     fun restoreSession() {
         viewModelScope.launch { auth.restoreSession() }
     }
@@ -189,3 +329,68 @@ class AuthViewModel(private val auth: SupabaseAuthService) : ViewModel() {
     private fun clearedError(form: AuthFormState) =
         if (form.errorMessage == null) form else form.copy(errorMessage = null)
 }
+
+/**
+ * One open password-recovery link: the code it carried, and everything the reset
+ * screen renders from.
+ *
+ * Deliberately **not** in `AuthUiState.kt` with the other screen states, and
+ * deliberately not merged into `ResetPasswordState`. Two reasons, and they point
+ * the same way:
+ *
+ * 1. It holds a credential. `ResetPasswordState` is handed to a composable and
+ *    is the shape a screen test builds by hand; the recovery code has no
+ *    business in either. Only [AuthViewModel] ever sees this type, and the code
+ *    never reaches the composition — the host passes the three rendered pieces.
+ * 2. `confirm` and `isLinkValid` are the two values `ResetPasswordScreen`
+ *    documents as missing from its state. They live here, on the object the
+ *    orchestrator owns, until they land on the state itself.
+ *
+ * Existing at all is the signal: `null` means no link is open, so clearing the
+ * field and forgetting the code are the same act, and there is no second place
+ * to remember to wipe.
+ *
+ * @param code the single-use recovery code from the link. Never logged.
+ * @param confirm the "Confirm password" field, which is only ever compared with
+ *   [ResetPasswordState.password] and is never sent anywhere.
+ * @param isLinkValid the code was exchanged for a recovery session. Not the same
+ *   as "no error": a failed *submit* also sets an error, and the form must stay
+ *   up in that case rather than flipping to the invalid-link body.
+ */
+data class ResetPasswordSession(
+    val code: String,
+    val state: ResetPasswordState = ResetPasswordState(),
+    val confirm: String = "",
+    val isLinkValid: Boolean = false,
+) {
+    /**
+     * The submit gate, matching the one `ResetPasswordScreen` puts on its
+     * button: `passwordValid && password == confirm && !submitting &&
+     * !exchanging && linkValid` (`ResetPasswordView.swift:35`).
+     *
+     * Duplicated rather than shared because the screen owns its button's copy
+     * and this file may not change the screen. That is survivable only because
+     * both are pinned by test: if the two ever disagree the button and the call
+     * disagree, which is a silent dead tap.
+     */
+    val canSubmit: Boolean
+        get() = state.password.length >= MIN_RESET_PASSWORD_LENGTH &&
+            state.password == confirm &&
+            !state.form.isBusy &&
+            !state.isExchangingCode &&
+            isLinkValid
+
+    /**
+     * A data class prints every field it has, so the generated `toString` would
+     * put the recovery code — and both copies of the new password — into
+     * whatever printed it: a log line, a crash report, an exception message from
+     * a failed assertion. There is no version of that which is acceptable for a
+     * credential, and the cheapest way to make it impossible is to have nothing
+     * to print. `equals`/`hashCode` are untouched, so tests can still compare
+     * whole sessions.
+     */
+    override fun toString(): String = "ResetPasswordSession(redacted)"
+}
+
+/** iOS gates on `password.count >= 8`, as does `ResetPasswordScreen`. */
+private const val MIN_RESET_PASSWORD_LENGTH = 8

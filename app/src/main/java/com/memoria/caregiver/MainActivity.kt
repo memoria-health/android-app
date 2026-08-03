@@ -1,5 +1,6 @@
 package com.memoria.caregiver
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
@@ -49,6 +50,21 @@ import com.memoria.caregiver.ui.detectors.PatientDetectorsScreen
 import com.memoria.caregiver.ui.detectors.PatientDetectorsViewModel
 import com.memoria.caregiver.ui.patient.PatientShell
 import com.memoria.caregiver.ui.nav.ScopedViewModelStore
+import com.memoria.caregiver.ui.nav.ModalOverlay
+import com.memoria.caregiver.ui.nav.NotBuiltScreen
+import com.memoria.caregiver.ui.cameras.AddCameraHost
+import com.memoria.caregiver.ui.cameras.CameraDetailHost
+import com.memoria.caregiver.ui.detectors.AddDetectorHost
+import com.memoria.caregiver.ui.detectors.DetectorDetailHost
+import com.memoria.caregiver.ui.detectors.DetectorLibraryHost
+import com.memoria.caregiver.ui.detectors.DetectorLibraryMode
+import com.memoria.caregiver.ui.onboarding.FaceEnrollmentHost
+import com.memoria.caregiver.ui.onboarding.NewPatientHost
+import com.memoria.caregiver.ui.onboarding.rememberEnrollmentPermission
+import com.memoria.caregiver.ui.permissions.PermissionState
+import com.memoria.caregiver.ui.settings.EditProfileHost
+import com.memoria.caregiver.ui.settings.rememberPatientPhotoUpload
+import com.memoria.caregiver.ui.support.FeedbackHost
 import androidx.compose.material3.ModalBottomSheet
 import com.memoria.caregiver.ui.settings.DataCollectionConsentSheet
 import com.memoria.caregiver.ui.settings.patientDisplayName
@@ -81,6 +97,13 @@ import androidx.compose.runtime.CompositionLocalProvider
  */
 class MainActivity : ComponentActivity() {
 
+    /**
+     * Held as a field, not a local in [onCreate], because [onNewIntent] needs it:
+     * a recovery link tapped while the app is already running arrives there, and
+     * there is no composition to reach it through from a callback.
+     */
+    private lateinit var authViewModel: AuthViewModel
+
     // ModalBottomSheet is still marked experimental in material3. Opted in at
     // the one place it is used (the data-collection consent sheet) rather than
     // module-wide, so the next experimental API someone reaches for still has to
@@ -102,10 +125,17 @@ class MainActivity : ComponentActivity() {
         // Realtime socket and camera poll running. See MemoriaApplication.
         val env = (application as MemoriaApplication).environment
         val owner = this as ViewModelStoreOwner
-        val authViewModel = ViewModelProvider(
+        authViewModel = ViewModelProvider(
             owner,
             viewModelFactory { initializer { AuthViewModel(env.auth) } },
         )[AuthViewModel::class.java]
+
+        // Cold start: the app was not running and the recovery link is what
+        // launched it. Only on a FIRST create — a configuration change re-runs
+        // onCreate with the same intent, and the view model survives that and
+        // already has the code, so handing it over again would spend a
+        // single-use code twice and turn a working screen into "link expired".
+        if (savedInstanceState == null) consumeRecoveryLink(intent)
         val rosterViewModel = ViewModelProvider(
             owner,
             viewModelFactory { initializer { RosterViewModel(env.api, env.auth) } },
@@ -116,11 +146,11 @@ class MainActivity : ComponentActivity() {
         )[AppSettingsViewModel::class.java]
 
         setContent {
-            // Contact support is a full-surface sheet over the signed-in app, so
-            // the flag lives above both shells rather than inside either.
-            var showSupport by androidx.compose.runtime.remember {
-                androidx.compose.runtime.mutableStateOf(false)
-            }
+            // Composed here, at the root, and NEVER fired here. Composing the
+            // gate registers the launcher and prompts nobody; `request()` is
+            // called from the taps that mean "start enrollment" — the identity
+            // card's Enroll row. See RuntimePermission.kt and DIFFERENCES.md D13.
+            val cameraPermission = rememberEnrollmentPermission()
             // The real analytics transport lands in Phase 8. Until then the
             // no-op sink keeps every component's internal logging call valid
             // without inventing a half-built pipeline.
@@ -154,13 +184,28 @@ class MainActivity : ComponentActivity() {
                             viewModel = authViewModel,
                             modifier = Modifier.safeDrawingPadding(),
                             signedInContent = {
+                                // The three destinations the main shell hoists.
+                                // Declared INSIDE this lambda, not beside
+                                // `showSupport` above it: the lambda leaves the
+                                // composition on sign-out, which discards these
+                                // with it. Held outside, a caregiver who signed
+                                // out with the new-patient form open would hand
+                                // the next one that same form on sign-in — the
+                                // shape of FINDINGS.md F-24, which `showSupport`
+                                // still has.
+                                // All four live INSIDE signedInContent, so signing
+                                // out discards them. showSupport used to sit at the
+                                // root, which meant a sheet left open across a
+                                // sign-out would still be open for the next
+                                // caregiver — the same shape as F-24.
+                                var showSupport by remember { mutableStateOf(false) }
+                                var showAddPatient by remember { mutableStateOf(false) }
+                                var showEditProfile by remember { mutableStateOf(false) }
+                                var showPrivacy by remember { mutableStateOf(false) }
                                 MainShell(
                                     rosterViewModel = rosterViewModel,
                                     settingsViewModel = settingsViewModel,
                                     deepLink = env.deepLink,
-                                    // The patient bundle lands next; until it
-                                    // does this is an explicit placeholder
-                                    // rather than a screen that half-works.
                                     patientContent = { patientId ->
                                         PatientRoute(
                                             env = env,
@@ -168,14 +213,53 @@ class MainActivity : ComponentActivity() {
                                             resolvePhotoUrl = rosterViewModel::resolvePhotoUrl,
                                             onHome = { env.deepLink.closePatient() },
                                             onContactSupport = { showSupport = true },
+                                            cameraPermission = cameraPermission,
                                         )
                                     },
-                                    onAddPatient = {},
-                                    onEditProfile = {},
-                                    onPrivacy = {},
+                                    onAddPatient = { showAddPatient = true },
+                                    onEditProfile = { showEditProfile = true },
+                                    onPrivacy = { showPrivacy = true },
                                     onContactSupport = { showSupport = true },
                                 )
-                                if (showSupport) ScopedViewModelStore("support") {
+                                if (showAddPatient) ModalOverlay {
+                                    NewPatientHost(
+                                        api = env.api,
+                                        // Handed down for the enrollment step at
+                                        // the end of the post-create flow. The
+                                        // gate is composed at the root and fires
+                                        // only from a tap.
+                                        cameraPermission = cameraPermission,
+                                        onDismiss = { showAddPatient = false },
+                                    )
+                                }
+                                if (showEditProfile) ModalOverlay {
+                                    val me by env.auth.currentCaregiver.collectAsState()
+                                    EditProfileHost(
+                                        caregiver = me,
+                                        api = env.api,
+                                        auth = env.auth,
+                                        onDismiss = { showEditProfile = false },
+                                    )
+                                }
+                                if (showPrivacy) ModalOverlay {
+                                    // The one row in this task with nothing to
+                                    // reach. iOS's `PrivacyPolicyView` is 280
+                                    // lines of bundled policy text and has no
+                                    // Android port at all — FINDINGS.md F-14
+                                    // lists it as missing, not as unwired. The
+                                    // text is a legal artefact and inventing an
+                                    // Android copy of it would be worse than
+                                    // saying it is not here yet.
+                                    NotBuiltScreen(
+                                        title = "Privacy & data",
+                                        reason = "The privacy notice has not been " +
+                                            "brought across to Android yet. It is " +
+                                            "available in full at " +
+                                            "dashboard.nemara-health.com/privacy.",
+                                        onBack = { showPrivacy = false },
+                                    )
+                                }
+                                if (showSupport) ModalOverlay { ScopedViewModelStore("support") {
                                     // Scoped, so closing the sheet CLEARS the
                                     // ViewModel. Activity-scoped, its `dismissed`
                                     // flag was never reset, so the second tap on
@@ -210,7 +294,7 @@ class MainActivity : ComponentActivity() {
                                         onSend = supportViewModel::send,
                                         onCancel = supportViewModel::cancel,
                                     )
-                                }
+                                } }
                             },
                         )
                     }
@@ -218,6 +302,56 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    /**
+     * Warm start: the app was already running and the caregiver tapped the
+     * recovery link. Reaches this instance rather than starting a second copy of
+     * the app only because the manifest declares `launchMode="singleTop"` — see
+     * the comment there.
+     */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        // Keep getIntent() in step with what was actually delivered. Without
+        // this the Activity still reports the intent it was launched with, and
+        // anything that reads it later — including this class, after a
+        // configuration change — would be reading a stale one.
+        setIntent(intent)
+        consumeRecoveryLink(intent)
+    }
+
+    /**
+     * Hand a recovery link to [AuthViewModel], which opens the reset screen over
+     * whatever is on screen. Anything that is not a recovery link is left alone.
+     */
+    private fun consumeRecoveryLink(intent: Intent?) {
+        val code = recoveryCodeFrom(intent) ?: return
+        // Take the code back out of the intent as it is read. The system keeps
+        // an Activity's intent and prints it in bug reports and `dumpsys
+        // activity`, and a re-created Activity is handed it again — none of
+        // which should be true of a credential that has now been consumed.
+        intent?.data = null
+        authViewModel.onRecoveryLink(code)
+    }
+}
+
+/**
+ * The recovery code carried by a `nemara://reset-password?code=…` link, or null
+ * for every other intent.
+ *
+ * A pure function of the intent so the parsing can be tested without an
+ * Activity, and so the one place that decides "this is a recovery link" is
+ * readable in full. iOS does the same three checks in
+ * `NemaraCaregiverApp.handleIncomingURL`: scheme, host, then the `code` query
+ * item, dropping the open when there is no code at all.
+ *
+ * An empty `?code=` is passed through rather than dropped, matching iOS. The
+ * exchange then fails and the screen says the link is invalid, which is a truer
+ * answer to a broken link than a tap that appears to do nothing.
+ */
+internal fun recoveryCodeFrom(intent: Intent?): String? {
+    val data = intent?.data ?: return null
+    if (data.scheme != "nemara" || data.host != "reset-password") return null
+    return data.getQueryParameter("code")
 }
 
 /**
@@ -237,6 +371,12 @@ private fun PatientRoute(
     resolvePhotoUrl: suspend (String) -> String?,
     onHome: () -> Unit,
     onContactSupport: () -> Unit,
+    /**
+     * The camera gate for face enrollment, composed once at the root. Passed
+     * down rather than re-composed here so a patient switch cannot lose an
+     * in-flight permission result.
+     */
+    cameraPermission: PermissionState,
 ) {
     val patients by env.api.patientsFlow.collectAsState()
     val patient = patients.firstOrNull { it.id == patientId }
@@ -247,7 +387,15 @@ private fun PatientRoute(
     }
 
     ScopedViewModelStore("patient:" + patientId) {
-        PatientTabs(env, patient, patientId, resolvePhotoUrl, onHome, onContactSupport)
+        PatientTabs(
+            env = env,
+            patient = patient,
+            patientId = patientId,
+            resolvePhotoUrl = resolvePhotoUrl,
+            onHome = onHome,
+            onContactSupport = onContactSupport,
+            cameraPermission = cameraPermission,
+        )
     }
 }
 
@@ -267,6 +415,7 @@ private fun PatientTabs(
     resolvePhotoUrl: suspend (String) -> String?,
     onHome: () -> Unit,
     onContactSupport: () -> Unit,
+    cameraPermission: PermissionState,
 ) {
     val eventsViewModel: EventsListViewModel = viewModel(
         // Keyed on the patient, so switching patients does not carry the
@@ -327,16 +476,21 @@ private fun PatientTabs(
         }
     }
 
+    // The patient-scoped destinations, all of them presented over the shell as
+    // iOS presents them over its own. One value rather than six booleans: they
+    // are mutually exclusive, and six flags admit states that cannot be drawn.
+    var destination by remember(patientId) {
+        mutableStateOf<PatientDestination>(PatientDestination.None)
+    }
+
     PatientShell(
         patient = patient,
         resolvePhotoUrl = resolvePhotoUrl,
         eventsViewModel = eventsViewModel,
         onHome = onHome,
-        // Feedback, the three remaining tabs and the event detail are the next
-        // slice. They are explicit stubs rather than half-built screens: a tab
-        // that renders something plausible but inert is the exact failure
-        // FINDINGS.md F-10 and H-12 are both about.
-        onFeedback = {},
+        // The header pill, on every one of the five sub-tabs. iOS keeps a single
+        // presentation point on PatientShell for exactly the same reason.
+        onFeedback = { destination = PatientDestination.Feedback },
         onContactSupport = onContactSupport,
         // The single LiveKit teardown point, and it is deliberately empty
         // rather than absent. LiveKitClient exists and is tested but is not
@@ -355,12 +509,12 @@ private fun PatientTabs(
             val cameraState by camerasViewModel.state.collectAsState()
             CameraListScreen(
                 state = cameraState,
-                // Camera detail and the add-sensor wizard are the next slice.
-                // SensorSetupWizard step 2 is separately blocked on QUESTIONS.md
-                // Q5 — Android has no equivalent of the captive portal iOS
-                // relies on, so that interaction has to be designed, not ported.
-                onSelectCamera = {},
-                onAddSensor = {},
+                onSelectCamera = { destination = PatientDestination.Camera(it) },
+                // The sheet is reachable and its phone tab is complete. Its
+                // sensor tab's step 2 is still blocked on QUESTIONS.md Q5 —
+                // Android has no equivalent of the captive portal iOS relies on
+                // — and says so on screen rather than rendering an inert form.
+                onAddSensor = { destination = PatientDestination.AddSensor },
             )
         },
         detectorsContent = {
@@ -373,11 +527,9 @@ private fun PatientTabs(
                 onToggleDetector = detectorsViewModel::toggleDetector,
                 onDeleteDetector = detectorsViewModel::deleteDetector,
                 onLoadDoorConfigs = detectorsViewModel::loadDoorConfigs,
-                // Authoring and the library are presented flows; their
-                // ViewModels exist and tested. Wiring them is the next slice.
-                onAddCustomDetector = {},
-                onOpenLibrary = {},
-                onEditDetector = {},
+                onAddCustomDetector = { destination = PatientDestination.AddDetector },
+                onOpenLibrary = { destination = PatientDestination.DetectorLibrary },
+                onEditDetector = { destination = PatientDestination.EditDetector(it) },
             )
         },
         settingsContent = {
@@ -387,6 +539,7 @@ private fun PatientTabs(
             LaunchedEffect(patientSettingsViewModel) {
                 patientSettingsViewModel.runEnrollmentPoll()
             }
+            val pickPhoto = rememberPatientPhotoUpload(patientSettingsViewModel)
             PatientSettingsScreen(
                 state = settingsState,
                 resolvePhotoUrl = patientSettingsViewModel::resolvePhotoUrl,
@@ -400,14 +553,90 @@ private fun PatientTabs(
                 onAudioCaptureChange = patientSettingsViewModel::setAudioCapture,
                 onDataCollectionChange = patientSettingsViewModel::setDataCollectionEnabled,
                 onRemovePatient = patientSettingsViewModel::deletePatient,
-                // Each of these PRESENTS something that is not built yet: a
-                // photo picker, the enrollment flow, the feedback sheet.
-                onPickPhoto = {},
-                onEnroll = {},
-                onOpenFeedback = {},
+                onPickPhoto = pickPhoto,
+                onEnroll = {
+                    // The tap IS the deliberate action the permission gate waits
+                    // for, so the request goes here and not inside the enrollment
+                    // screen. Composing that screen instead would ambush anyone
+                    // who merely reached it. DIFFERENCES.md D13.
+                    cameraPermission.request()
+                    destination = PatientDestination.Enroll
+                },
+                onOpenFeedback = { destination = PatientDestination.Feedback },
             )
         },
     )
+
+    // The patient-scoped stack, drawn over the shell exactly as iOS's sheets and
+    // covers are. Every branch owns a BackHandler through its host or through
+    // NotBuiltScreen; none of them may let Back reach the Activity.
+    when (val open = destination) {
+        PatientDestination.None -> Unit
+
+        PatientDestination.Feedback -> ModalOverlay {
+            FeedbackHost(
+                api = env.api,
+                onDismiss = { destination = PatientDestination.None },
+            )
+        }
+
+        is PatientDestination.Camera -> ModalOverlay {
+            CameraDetailHost(
+                api = env.api,
+                patientId = patientId,
+                cameraId = open.cameraId,
+                onBack = { destination = PatientDestination.None },
+            )
+        }
+
+        PatientDestination.AddSensor -> ModalOverlay {
+            AddCameraHost(
+                api = env.api,
+                patientId = patientId,
+                onDismiss = { destination = PatientDestination.None },
+            )
+        }
+
+        PatientDestination.AddDetector -> ModalOverlay {
+            AddDetectorHost(
+                api = env.api,
+                patientId = patientId,
+                onDismiss = { destination = PatientDestination.None },
+            )
+        }
+
+        PatientDestination.DetectorLibrary -> ModalOverlay {
+            DetectorLibraryHost(
+                api = env.api,
+                patientId = patientId,
+                mode = DetectorLibraryMode.Add,
+                onFinished = { destination = PatientDestination.None },
+                // Add-mode's leading button is Cancel, which just closes.
+                onLeading = { destination = PatientDestination.None },
+            )
+        }
+
+        is PatientDestination.EditDetector -> ModalOverlay {
+            DetectorDetailHost(
+                api = env.api,
+                patientId = patientId,
+                detector = open.detector,
+                onDismiss = { destination = PatientDestination.None },
+            )
+        }
+
+        PatientDestination.Enroll -> ModalOverlay {
+            FaceEnrollmentHost(
+                api = env.api,
+                patientId = patientId,
+                permission = cameraPermission,
+                // Skip, Done and a successful upload all land here, as iOS's
+                // single `onComplete` does. The identity card behind refreshes
+                // itself: the summary poll restarts when the tab comes back.
+                onComplete = { destination = PatientDestination.None },
+            )
+        }
+    }
 
     // The event stack: list -> detail -> review. Rendered over the shell rather
     // than as tabs, mirroring iOS's sheet from PatientEventsView.
@@ -423,7 +652,7 @@ private fun PatientTabs(
             // Back returns to the detail, not out of the app. Typed notes
             // survive it, and survive a configuration change.
             BackHandler { reviewing = false }
-            EventReviewScreen(
+            ModalOverlay { EventReviewScreen(
                 state = review,
                 onChoiceChange = { review = review.copy(choice = it) },
                 onNotesChange = { review = review.copy(notes = it) },
@@ -433,7 +662,7 @@ private fun PatientTabs(
                     eventsViewModel.submitReview(event, review.choice, review.notes)
                 },
                 onBack = { reviewing = false },
-            )
+            ) }
         } else {
             val detailViewModel: EventDetailViewModel = viewModel(
                 // Concatenated, not interpolated. This was written as
@@ -449,7 +678,7 @@ private fun PatientTabs(
             )
             val detailState by detailViewModel.state.collectAsState()
             BackHandler { eventsViewModel.closeEvent() }
-            EventDetailScreen(
+            ModalOverlay { EventDetailScreen(
                 state = detailState,
                 onBack = eventsViewModel::closeEvent,
                 onReviewEvent = { reviewing = true },
@@ -458,9 +687,51 @@ private fun PatientTabs(
                 // mistaken for "this event has no clip" — the detail screen has
                 // a real, separate empty state for the latter.
                 clipPlayer = { ClipPlayerStub() },
-            )
+            ) }
         }
     }
+}
+
+/**
+ * Where the patient bundle is, on top of its five tabs.
+ *
+ * One value rather than six booleans. iOS can afford six `@State` flags because
+ * SwiftUI serialises its own presentations; here two flags true at once would
+ * draw two full-surface screens over each other, and the type makes that
+ * unrepresentable.
+ *
+ * The event stack is deliberately NOT in here: it is driven by
+ * `EventsListViewModel.openEvent`, which the deep-link router can set from
+ * outside, and folding it in would give that router a second way in.
+ */
+private sealed interface PatientDestination {
+
+    data object None : PatientDestination
+
+    /** The feedback form. Reached from the header pill and the Settings row. */
+    data object Feedback : PatientDestination
+
+    /** One sensor's detail. */
+    data class Camera(val cameraId: String) : PatientDestination
+
+    /** The add-a-sensor sheet. */
+    data object AddSensor : PatientDestination
+
+    data object AddDetector : PatientDestination
+
+    data object DetectorLibrary : PatientDestination
+
+    /**
+     * The detector editor. Carries the row rather than its id: the sheet opens
+     * on the detector the caregiver tapped and re-reads the cache itself, so
+     * looking the id back up here would only add a way to fail.
+     */
+    data class EditDetector(
+        val detector: com.memoria.caregiver.data.model.Detector,
+    ) : PatientDestination
+
+    /** Face enrollment. No consent step — that one belongs to a new patient. */
+    data object Enroll : PatientDestination
 }
 
 /** Stands in for the clip player until one is built. */

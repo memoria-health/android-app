@@ -268,6 +268,23 @@ class PatientSettingsViewModel(
      * read-modify-write below it has no suspension inside it, which is the
      * discipline `loadDetectors` documents for exactly this hazard.
      */
+    /**
+     * The pick failed before there were any bytes to upload — the stream would
+     * not open, or the file is not an image this platform decodes.
+     *
+     * iOS reports both through the same `photoUploadError` the upload itself
+     * uses (`uploadPickedPhoto`'s two `guard`s), so the caregiver reads one
+     * sentence in one place whether the photo died on the device or on the wire.
+     * The two messages are in `NewPatientPhoto.kt`, verbatim from the Swift.
+     *
+     * Deliberately does not touch [Local.isUploadingPhoto]: nothing was ever
+     * uploading, and raising it here would leave the badge disabled after a bad
+     * pick.
+     */
+    fun reportPhotoPickFailure(message: String) {
+        _local.update { it.copy(photoUploadError = message) }
+    }
+
     fun uploadPhoto(imageData: ByteArray, contentType: String) {
         if (_local.value.isUploadingPhoto) return
         _local.update { it.copy(isUploadingPhoto = true, photoUploadError = null) }

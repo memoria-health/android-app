@@ -39,15 +39,50 @@
         android:supportsRtl="false"
         android:theme="@style/Theme.Memoria">
 
-        <!-- iOS is portrait-only and phone-only (PARITY.md §1). Match it. -->
+        <!--
+          iOS is portrait-only and phone-only (PARITY.md §1). Match it.
+
+          launchMode="singleTop" is required by the recovery link below, not a
+          preference. Under the default ("standard") mode, tapping the link in
+          the email app while Memoria is already running starts a SECOND
+          MainActivity on top of the first: onNewIntent never fires, the
+          caregiver resets their password in a duplicate copy of the app, and
+          Back reveals the stale one underneath. singleTop hands the link to the
+          instance that is already on top of the task instead, which is what
+          makes the onNewIntent path below reachable at all. Nothing else in the
+          app depends on being re-created per intent, so there is no cost.
+        -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTop"
             android:screenOrientation="portrait"
             android:theme="@style/Theme.Memoria">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!--
+              The password-recovery link. Supabase sends the caregiver an email
+              whose button opens `AppConfig.supabasePasswordResetRedirect` —
+              `nemara://reset-password?code=…` — which is the same scheme and
+              host iOS registers in `project.yml` (CFBundleURLSchemes: nemara).
+              Both halves must match the redirect exactly or the link opens
+              nothing, which is the state this app was in: the email sent, the
+              tap resolved to no app, and password recovery was impossible.
+
+              BROWSABLE is what lets a link *in a browser or email client* start
+              us; without it only another app calling startActivity could. It
+              does mean any app can launch this screen with an arbitrary code,
+              which is true of the iOS scheme too and is harmless: a code that
+              Supabase did not mint fails the exchange and the screen says so.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="nemara" android:host="reset-password" />
             </intent-filter>
         </activity>
     </application>

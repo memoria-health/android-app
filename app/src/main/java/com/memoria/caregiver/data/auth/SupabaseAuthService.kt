@@ -37,6 +37,24 @@ class SupabaseAuthService(
     /** `null` ⇒ the welcome / sign-in flow renders; non-null ⇒ the main app. */
     val currentCaregiver: StateFlow<Caregiver?> = _currentCaregiver.asStateFlow()
 
+    /**
+     * Replaces the cached caregiver row with a fresher one from `PATCH /v1/me`.
+     *
+     * iOS writes this directly — `env.auth.currentCaregiver = updated` in
+     * `EditProfileView.save()` — because the profile editor holds the only copy
+     * of the updated row and nothing else re-reads it. Kotlin's flow is
+     * read-only from outside, so the same assignment needs a named door.
+     *
+     * **Deliberately narrow: it cannot sign anybody in or out.** A null is not
+     * accepted, so this can only ever swap one signed-in caregiver's details for
+     * another version of the same row; the sign-in and sign-out paths keep sole
+     * ownership of the null transition, which is what the whole app's
+     * signed-in/signed-out branch is keyed on.
+     */
+    fun updateCurrentCaregiver(caregiver: Caregiver) {
+        _currentCaregiver.value = caregiver
+    }
+
     private val _isAuthenticating = MutableStateFlow(false)
 
     /** True while a sign-up / sign-in / restore call is in flight. */

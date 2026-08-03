@@ -268,4 +268,39 @@ statement performs both — which is why the test had nothing left to assert.
 
 ---
 
+## D-015 — Reset password is a cover, not a route
+**Date:** 2026-08-03 · **Reversal cost:** small (one `if` and a view-model field)
+
+`Routes.RESET_PASSWORD` and `Routes.resetPassword(code)` had existed unused since
+the route table was written, so wiring `composable(Routes.RESET_PASSWORD)` was
+the obvious way to reach `ResetPasswordScreen` when fixing `FINDINGS.md` F-26.
+**Rejected**, for two independent reasons.
+
+**The argument is a credential.** A route takes the recovery code as a path
+argument. Navigation Compose keeps arguments on the back stack entry, and the
+back stack is written into the Activity's saved-state Bundle — so a single-use
+code would be persisted by the framework, survive process death, and remain on
+the back stack after the screen that consumed it was gone. The code would also
+appear in the route string in any navigation logging.
+
+**It would be unreachable when signed in.** `AuthNavHost` renders the signed-out
+graph only while `currentCaregiver` is null, so a route inside it cannot open
+over the dashboard. iOS presents `ResetPasswordView` as a `fullScreenCover` on
+RootView, which covers the welcome screen *and* the dashboard, and leaves what is
+underneath alive.
+
+**Decided:** the screen is presented from `AuthViewModel.reset`, a
+`ResetPasswordSession?` drawn over both branches inside `AuthNavHost`. Null means
+no link is open, so clearing the field and forgetting the code are one act. The
+two route constants and `ARG_CODE` are deleted and replaced by a comment saying
+why, so the next person does not re-add them.
+
+**Cost, stated plainly:** the screen is now a conditional branch rather than a
+route, so it needs its own `BackHandler` (F-25) and its own pointer-input guard
+to stop touches reaching the screen underneath — both of which Navigation Compose
+would have supplied. Those are one line each and are pinned by test; the
+persistence of a credential would not have been.
+
+---
+
 _(Append as decisions are made. Never delete; mark REVERSED with the date.)_

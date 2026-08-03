@@ -19,12 +19,15 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.memoria.caregiver.analytics.LocalAnalytics
 import com.memoria.caregiver.data.AppConfig
 import com.memoria.caregiver.legal.LegalConstants
 import com.memoria.caregiver.ui.auth.AuthViewModel
 import com.memoria.caregiver.ui.auth.ForgotPasswordScreen
 import com.memoria.caregiver.ui.auth.LoginScreen
 import com.memoria.caregiver.ui.auth.PdfPageLoader
+import com.memoria.caregiver.ui.auth.ResetPasswordScreen
+import com.memoria.caregiver.ui.auth.ResetPasswordState
 import com.memoria.caregiver.ui.auth.SignUpScreen
 import com.memoria.caregiver.ui.auth.SignUpState
 import com.memoria.caregiver.ui.auth.TermsGateScreen
@@ -39,6 +42,11 @@ import com.memoria.caregiver.ui.auth.WelcomeScreen
  * the root, which is the [LaunchedEffect] here — a cold launch with a cached
  * session lands straight on a populated roster rather than the welcome screen.
  *
+ * Over both of those sits the password-reset screen, when a recovery link is
+ * open. It is a cover rather than a route, and the recovery code it was reached
+ * with lives in the view model rather than in a navigation argument — see
+ * DECISIONS.md, "Reset password is a cover, not a route".
+ *
  * Deliberately NOT ported: the two-tick dismiss/present dance around
  * `fullScreenCover` (DIFFERENCES.md D1). Navigation Compose can swap a
  * destination in one pass.
@@ -51,19 +59,56 @@ fun AuthNavHost(
     navController: NavHostController = rememberNavController(),
 ) {
     val caregiver by viewModel.currentCaregiver.collectAsState()
+    val reset by viewModel.reset.collectAsState()
 
     // iOS: `.task { await env.auth.restoreSession() }` on RootView.
     LaunchedEffect(Unit) { viewModel.restoreSession() }
 
-    if (caregiver != null) {
-        Box(modifier.fillMaxSize()) { signedInContent() }
-        return
-    }
+    Box(modifier.fillMaxSize()) {
+        if (caregiver != null) {
+            signedInContent()
+        } else {
+            SignedOutGraph(viewModel = viewModel, navController = navController)
+        }
 
+        // The recovery link, drawn OVER whichever of the two is up — iOS presents
+        // `ResetPasswordView` as a `fullScreenCover` on RootView, so it appears
+        // over the welcome screen when signed out and over the dashboard when
+        // signed in, and what is underneath stays alive. A Navigation Compose
+        // destination could do neither: it lives inside the signed-out graph, so
+        // a caregiver who is already signed in would tap the link and reach
+        // nothing, and entering the route would tear down whatever they were on.
+        //
+        // A local `val` because a delegated `by` property is not a smart-cast
+        // subject — the null check below has to hold for the body.
+        val session = reset
+        if (session != null) {
+            ResetPasswordDestination(
+                state = session.state,
+                confirm = session.confirm,
+                isLinkValid = session.isLinkValid,
+                onPasswordChange = viewModel::onResetPasswordChange,
+                onConfirmChange = viewModel::onResetConfirmChange,
+                onSubmit = viewModel::submitPasswordReset,
+                onClose = viewModel::closePasswordReset,
+            )
+        }
+    }
+}
+
+/**
+ * Welcome → Login / Sign up / Forgot password. Split out of [AuthNavHost] so
+ * that function reads as the two layers it now is: the app, and the cover.
+ */
+@Composable
+private fun SignedOutGraph(
+    viewModel: AuthViewModel,
+    navController: NavHostController,
+) {
     NavHost(
         navController = navController,
         startDestination = Routes.WELCOME,
-        modifier = modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize(),
     ) {
         composable(Routes.WELCOME) {
             WelcomeScreen(
@@ -252,4 +297,64 @@ internal fun SignUpDestination(
             pageSource = pageSource,
         )
     }
+}
+
+/**
+ * The password-reset screen as it is actually presented: over the app, with the
+ * two things a cover needs on Android that iOS gets from the platform.
+ *
+ * Split out of [AuthNavHost] for the same reason [SignUpDestination] is — so a
+ * test can drive it in states the offline harness cannot reach, `isLinkValid`
+ * above all, which only a real code exchange sets.
+ *
+ * **The recovery code is not a parameter.** It stays in the view model and never
+ * enters the composition: the screen has no use for it, and a credential in a
+ * composable's arguments is a credential in whatever inspects, saves or dumps
+ * that composition.
+ */
+@Composable
+internal fun ResetPasswordDestination(
+    state: ResetPasswordState,
+    confirm: String,
+    isLinkValid: Boolean,
+    onPasswordChange: (String) -> Unit,
+    onConfirmChange: (String) -> Unit,
+    onSubmit: () -> Unit,
+    onClose: () -> Unit,
+) {
+    val analytics = LocalAnalytics.current
+    // iOS: `.trackScreen("reset_password")` on the cover, so it is logged by the
+    // presenter rather than by the view. A fixed label — the code it was reached
+    // with is a credential and never goes into an analytics event.
+    LaunchedEffect(Unit) { analytics.logScreen("reset_password") }
+
+    // Android's universal exit, and this screen is a conditional branch rather
+    // than a route, so nothing else handles it. Without this, Back — and the
+    // edge swipe, which is how most people close a screen — would fall through
+    // to the navigation host underneath and pop the welcome screen off, quitting
+    // the app from the middle of a password reset (FINDINGS.md F-25).
+    //
+    // Back is Close, which is the only exit iOS offers here too.
+    BackHandler(onBack = onClose)
+
+    ResetPasswordScreen(
+        state = state,
+        confirm = confirm,
+        isLinkValid = isLinkValid,
+        onPasswordChange = onPasswordChange,
+        onConfirmChange = onConfirmChange,
+        onSubmit = onSubmit,
+        onClose = onClose,
+        // The screen is opaque, but covering something visually is not covering
+        // it for touch: Compose hit-tests lower siblings wherever the top one has
+        // no pointer input, so a tap on the blank strip beside "Verifying link…"
+        // would reach the sign-in form underneath. Same guard, same reason, as
+        // the terms gate above. It consumes nothing, so the screen's own controls
+        // — hit first — still work.
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                awaitPointerEventScope { while (true) { awaitPointerEvent() } }
+            },
+    )
 }
