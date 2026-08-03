@@ -176,6 +176,40 @@ and `PARITY.md` §10 forbids splitting it into repository + store.
 
 ---
 
+### F-12 — Concurrent detector loads dropped a patient's whole list
+**Integration · Critical · FIXED 2026-08-02, found by a test**
+
+`loadDetectors` was written as a single expression:
+
+```kotlin
+detectorsByPatient = detectorsByPatient + (patientId to detectorsApi.loadDetectors(patientId))
+```
+
+Kotlin evaluates the left operand first, so the map is **read before the fetch
+suspends**. `bootstrap()` loads every patient concurrently, so with two patients
+both coroutines read the same pre-fetch map and the second write erased the
+first: **a caregiver with two patients saw one of them with no detectors at
+all** — no error, no empty state, just a household with its monitoring silently
+missing.
+
+Single-threaded confinement does not prevent this, which is the part worth
+remembering. The client's own comment says "single-threaded by contract", and
+that is true and still insufficient: a suspension point between the read and the
+write is an interleaving point even on one thread. `loadCameras` and
+`loadEventsFirstPage` happened to be safe only because they hoist the fetch into
+a local first.
+
+Fixed by hoisting. I then scanned every cache assignment for the same shape —
+`patients = patientsApi.loadPatients()` is a whole-value replacement with no read
+on the right, so `loadDetectors` was the only instance.
+
+**Found by the cache tests, not by review.** I wrote this code, read it back
+while writing the commit message that described the single-threaded contract,
+and did not see it. It is the first defect in this port caught by a test rather
+than by a person.
+
+---
+
 ## RESOLVED
 
 ### F-7 — The render watchdog has no `DIFFERENCES.md` entry

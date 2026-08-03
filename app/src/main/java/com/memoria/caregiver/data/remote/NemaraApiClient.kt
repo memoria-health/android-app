@@ -351,8 +351,21 @@ class NemaraApiClient(
     // ---- Detectors ----
 
     suspend fun loadDetectors(patientId: String) {
+        // Fetch FIRST, into a local, then read-modify-write the map with no
+        // suspension in between.
+        //
+        // Writing this as one expression — `detectorsByPatient +
+        // (patientId to detectorsApi.loadDetectors(...))` — reads the map
+        // before the fetch suspends, so with two patients loading at once both
+        // coroutines read the same pre-fetch map and the second write erases
+        // the first. bootstrap() loads every patient concurrently, so a
+        // caregiver with two patients saw one of them with no detectors at all.
+        // Single-threaded confinement does not save this: a suspension point
+        // between the read and the write is an interleaving point.
+        //
         // Server order, deliberately. The Swift does not sort detectors.
-        detectorsByPatient = detectorsByPatient + (patientId to detectorsApi.loadDetectors(patientId))
+        val list = detectorsApi.loadDetectors(patientId)
+        detectorsByPatient = detectorsByPatient + (patientId to list)
     }
 
     suspend fun createCustomDetector(patientId: String, body: CreateDetectorRequest): Detector {
