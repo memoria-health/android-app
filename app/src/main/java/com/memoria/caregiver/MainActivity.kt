@@ -43,9 +43,6 @@ import com.memoria.caregiver.ui.theme.NemaraType
 import com.memoria.caregiver.ui.theme.Paper
 import com.memoria.caregiver.ui.theme.Spacing
 import androidx.compose.runtime.CompositionLocalProvider
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.Dispatchers
 
 /**
  * The app's single activity.
@@ -62,8 +59,6 @@ import kotlinx.coroutines.Dispatchers
  */
 class MainActivity : ComponentActivity() {
 
-    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-
     override fun onCreate(savedInstanceState: Bundle?) {
         // Light scrims on both bars: the app is light-mode only, so dark system
         // icons on Paper is the only correct combination.
@@ -73,10 +68,12 @@ class MainActivity : ComponentActivity() {
         )
         super.onCreate(savedInstanceState)
 
-        // applicationContext, not `this`: the environment outlives every
-        // activity instance, and holding an activity would leak it across a
-        // configuration change.
-        val env = AppEnvironment(scope = appScope, appContext = applicationContext)
+        // From the Application, NOT built here. A configuration change recreates
+        // this Activity but retains the ViewModelStore, so building the
+        // environment in onCreate handed the shells a fresh, empty environment
+        // while the retained ViewModels kept the old one — and left the previous
+        // Realtime socket and camera poll running. See MemoriaApplication.
+        val env = (application as MemoriaApplication).environment
         val owner = this as ViewModelStoreOwner
         val authViewModel = ViewModelProvider(
             owner,

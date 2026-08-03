@@ -80,6 +80,63 @@ include a checklist derived from the iOS file list rather than from mine.
 
 ---
 
+### F-15 — Adversarial review of the integration work: 3 Critical, 7 Important
+**Integration · reviewed 2026-08-02 · Criticals FIXED same day**
+
+A dedicated adversarial pass over `92753c1..cd5f89e`. It was asked to verify my
+own claim that I had scanned for further instances of F-12; it re-derived the
+scan independently and confirmed it, then found three Criticals I had not.
+
+**C-1 — `AppEnvironment` was built per Activity while the ViewModels were
+retained. FIXED.** Its own KDoc says "one instance, created at process start";
+`MainActivity.onCreate` contradicted it. A `ViewModelStore` survives a
+configuration change and `onCreate` does not, so changing the system font size,
+display size, locale, or entering split-screen built a *second* environment —
+new HTTP client, new Realtime socket, empty cache — handed it to the shells, and
+left the retained ViewModels holding the first. Nothing cancelled the old scope,
+so every recreation leaked another Realtime socket and another one-second camera
+poll for the life of the process. The caregiver's symptom was being thrown out
+of a patient back to the roster. Fixed by moving the environment into
+`MemoriaApplication`.
+
+**C-2 — nothing was wired to the app lifecycle. FIXED.** `NemaraCaregiverApp.swift`
+drives `resync()`, `rebuildChannels()`, `startStatePolling()` and
+`stopStatePolling()` off `scenePhase`; none had a counterpart, and `resync()` and
+`rebuildChannels()` had **zero production callers**. The worst consequence: iOS
+gets "stop polling" free because the OS suspends the process, and **Android does
+not** — the poll was issuing one camera fetch per patient per second,
+indefinitely, backgrounded, on cellular. Fixed with a `ProcessLifecycleOwner`
+observer in `MemoriaApplication`.
+
+**C-3 — switching patient A → B carried A's whole shell across. FIXED.**
+`PatientShell` documents its teardown as firing when the caregiver leaves the
+patient. The sub-tab half was correct; this half was not. `MainShell` rendered
+`patientContent(openPatientId)` at a fixed call site, so A → B *recomposed* the
+same shell instead of replacing it. `DisposableEffect(Unit)` never fired, so once
+LiveKit is wired **patient A's room would stay connected inside patient B's
+shell — one household's live video under another household's name.** Already
+live: the events feed poll kept refreshing A's page and never B's. `DIFFERENCES.md`
+D1 claims "observable behaviour: identical" for dropping iOS's two-tick
+dismiss/present dance; it was not, because that dance was the only thing making
+the shell tear down on a patient switch. Fixed with `key(openPatientId)`, and the
+feed poll re-keyed on the ViewModel.
+
+**Also fixed now:** I-1 (three documented cache side effects — `refineDetector`'s
+non-preview swap, `uploadPatientPhoto`, `deletePatientPhoto` — had no owner at
+all, exactly the risk `DIFFERENCES.md` D15 names), I-3 (the sign-out privacy
+clear was elvis-chained behind an unguarded suspend call, so it ran only when
+there was no Realtime store, i.e. never), I-4 (leaving a patient reset the main
+tab bar to Home because `rememberSaveable` sat below the early return).
+
+**Still open from this review:** I-2 (per-patient ViewModels are never cleared —
+N stale copies each answer the next notification tap with their own authenticated
+fetch), I-5 (`PatientShell` drops the notification-steers-to-Events behaviour and
+the first-open data-collection consent sheet), I-6 (the Home button is an 18dp
+touch target and is the only exit from the patient bundle), I-7 (the cache tests
+aim away from the class of effect D15 says the split endangers), and M-1..M-7.
+
+---
+
 ### F-3 — Scene luma is measured on a different scale than iOS
 **Phase 6 · Important · CONFIRMED 2026-08-02 · needs a device to fix correctly**
 

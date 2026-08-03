@@ -144,6 +144,9 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+    // ProcessLifecycleOwner: the foreground/background signal MemoriaApplication
+    // needs to stop the 1s camera poll when the app is backgrounded.
+    implementation(libs.androidx.lifecycle.process)
     implementation(libs.kotlinx.coroutines.android)
 
     // Networking + serialization (Phase 2)

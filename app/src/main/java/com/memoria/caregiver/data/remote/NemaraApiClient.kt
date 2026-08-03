@@ -215,7 +215,18 @@ class NemaraApiClient(
      * the normal case for a care team.
      */
     suspend fun teardown() {
-        realtime?.teardown() ?: clear()
+        // clear() runs UNCONDITIONALLY and last. Written as
+        // `realtime?.teardown() ?: clear()`, the privacy clear ran only when
+        // there was no store — i.e. never in the real app — leaving it entirely
+        // dependent on RealtimeStore.teardown() reaching its final line, which
+        // sits after unsubscribing a possibly-dead websocket.
+        //
+        // runCatching for the same reason: a throw out of unsubscribe (or, once
+        // REQ-8 lands, out of push de-registration) would otherwise crash
+        // sign-out with the caregiver already swapped to the signed-out UI and
+        // the previous household still resident in memory.
+        runCatching { realtime?.teardown() }
+        clear()
     }
 
     private suspend fun loadEverythingForAllPatients() = coroutineScope {
@@ -403,6 +414,52 @@ class NemaraApiClient(
         detectorsByPatient = detectorsByPatient +
             (patientId to (detectorsByPatient[patientId].orEmpty() + created))
         return created
+    }
+
+    /**
+     * Refine a detector's plan with the caregiver's feedback.
+     *
+     * **A preview must never reach the cache.** `preview = true` returns a full
+     * `Detector` describing something that does not exist in that form yet;
+     * writing it would show the caregiver a saved detector they have not saved.
+     * iOS guards with `if !preview` and so does this.
+     */
+    suspend fun refineDetector(id: String, feedback: String, preview: Boolean = false): Detector {
+        val updated = detectorsApi.refineDetector(id, feedback, preview)
+        if (!preview) {
+            val arr = detectorsByPatient[updated.patientId]
+            if (arr != null && arr.any { it.id == updated.id }) {
+                detectorsByPatient = detectorsByPatient +
+                    (updated.patientId to arr.map { if (it.id == updated.id) updated else it })
+            }
+        }
+        return updated
+    }
+
+    // ---- Patient photo ----
+
+    /**
+     * Uploads a new photo and swaps the returned row into the cache, so every
+     * avatar on screen updates without a refetch.
+     */
+    suspend fun uploadPatientPhoto(patientId: String, bytes: ByteArray, contentType: String): Patient {
+        val updated = patientsApi.uploadPatientPhoto(patientId, bytes, contentType)
+        patients = patients.map { if (it.id == updated.id) updated else it }
+        return updated
+    }
+
+    /**
+     * Deletes the photo and clears `photoStorageKey` in place.
+     *
+     * The server returns no body, so the cached row is edited rather than
+     * replaced — exactly as the Swift does. Without it the avatar keeps
+     * rendering from a storage key that no longer resolves.
+     */
+    suspend fun deletePatientPhoto(patientId: String) {
+        patientsApi.deletePatientPhoto(patientId)
+        patients = patients.map {
+            if (it.id == patientId) it.copy(photoStorageKey = null) else it
+        }
     }
 
     // ---- Events ----

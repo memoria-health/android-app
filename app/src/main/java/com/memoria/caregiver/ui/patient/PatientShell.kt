@@ -127,7 +127,14 @@ fun PatientShell(
                         // behind the Live tab, which is the reliability net
                         // firing where nobody can see it and the battery cost
                         // landing where nobody asked for it.
-                        LaunchedEffect(Unit) { eventsViewModel.runFeedPoll() }
+                        // Keyed on the ViewModel, not on Unit. A running poll
+                        // captures the instance it started with, so a keyed-on-
+                        // Unit effect would keep refreshing the PREVIOUS
+                        // patient's feed after a switch and never refresh the
+                        // new one. Belt and braces with MainShell's key() —
+                        // this one also covers a ViewModel swapped under a
+                        // shell that did not leave composition.
+                        LaunchedEffect(eventsViewModel) { eventsViewModel.runFeedPoll() }
 
                         EventsListScreen(
                             state = state,

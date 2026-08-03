@@ -11,6 +11,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.mutableStateOf
@@ -67,15 +68,31 @@ fun MainShell(
 ) {
     val link by deepLink.state.collectAsState()
 
+    // Declared ABOVE the early return on purpose. Below it, opening a patient
+    // takes the whole Scaffold out of composition, `rememberSaveable`
+    // unregisters, and the caregiver who went Settings -> a patient -> Home
+    // lands back on Home rather than on Settings. iOS keeps its `@State
+    // selection` because the patient is a cover over a still-live TabView.
+    var tab by rememberSaveable { mutableStateOf(MainTab.HOME) }
+    val analytics = LocalAnalytics.current
+
     // The patient bundle takes over completely, including the tab bar.
     val openPatientId = link.openPatientId
     if (openPatientId != null) {
-        Box(modifier.fillMaxSize()) { patientContent(openPatientId) }
+        Box(modifier.fillMaxSize()) {
+            // key() on the patient id, which is load-bearing. The call site is
+            // fixed, so switching patient A -> B would otherwise RECOMPOSE the
+            // same shell rather than replace it: A's DisposableEffect would
+            // never fire (so A's LiveKit room would stay connected inside B's
+            // shell — one household's live video under another household's
+            // name), A's feed poll would keep running, and A's selected tab
+            // would carry across. iOS got the teardown from the cover being
+            // genuinely re-presented; DIFFERENCES.md D1 dropped that dance, and
+            // this is what replaces it.
+            key(openPatientId) { patientContent(openPatientId) }
+        }
         return
     }
-
-    var tab by rememberSaveable { mutableStateOf(MainTab.HOME) }
-    val analytics = LocalAnalytics.current
     val scope = rememberCoroutineScope()
 
     Scaffold(
