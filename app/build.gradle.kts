@@ -6,6 +6,42 @@ plugins {
     // rejects it ("no longer required for Kotlin support since AGP 9.0").
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
+    // On the build classpath, deliberately NOT applied here. See below.
+    alias(libs.plugins.google.services) apply false
+}
+
+// google-services.json does not exist in this repo and is gitignored, so it can
+// never be committed (REQUIREMENTS.md REQ-7). Applying the plugin unconditionally
+// would fail the build outright with "File google-services.json is missing" —
+// every task, including the unit test suite, on every machine.
+//
+// The two obvious ways out are both wrong:
+//
+//   - Committing a placeholder file. It would ship in the APK, the SDK would
+//     read it as a real configuration, and the app would try to reach a Firebase
+//     project that is not ours. A build that looks configured and is not is
+//     worse than one that plainly is not.
+//   - Leaving the plugin out and adding it later. Then the day the real file
+//     arrives, dropping it in does nothing until somebody also remembers to edit
+//     this file, and nothing anywhere says so.
+//
+// So the plugin is applied if and only if the file is there. Dropping the real
+// google-services.json into app/ is the whole of what REQ-7 needs from this
+// build: the plugin activates, generates the string resources the Firebase SDK
+// reads at startup, and push starts working with no further edit.
+//
+// Until then the app compiles and runs with firebase-messaging on the classpath
+// and no default FirebaseApp. That is not silent: see push/FirebasePushTokens.kt,
+// which reports it rather than behaving as though push were merely quiet.
+val googleServicesConfig = file("google-services.json")
+if (googleServicesConfig.exists()) {
+    apply(plugin = "com.google.gms.google-services")
+} else {
+    logger.lifecycle(
+        "PUSH DISABLED: app/google-services.json is missing, so the google-services " +
+            "plugin is not applied and no Firebase project is configured (REQ-7). " +
+            "The app builds and runs; it cannot receive a push.",
+    )
 }
 
 android {
@@ -185,6 +221,12 @@ dependencies {
     implementation(libs.androidx.camera.camera2)
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)
+
+    // Phase 7 — push (DECISIONS.md D-016). The BOM pins messaging and the Play
+    // Services artifacts it pulls; see the conditional plugin block above for why
+    // this compiles and runs without a Firebase project.
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.messaging)
 
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)

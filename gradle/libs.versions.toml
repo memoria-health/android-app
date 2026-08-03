@@ -37,6 +37,18 @@ livekit = "2.27.0"
 mlkitFace = "16.1.7"
 camerax = "1.6.1"
 
+# Phase 7 — push. FCM, per DECISIONS.md D-016.
+#
+# The BOM pins firebase-messaging and everything it drags in, which matters more
+# here than elsewhere: messaging pulls Play Services artifacts that version
+# independently, and a mismatched set fails at runtime rather than at build time.
+#
+# googleServices is the Gradle plugin that turns google-services.json into the
+# string resources the Firebase SDK reads at startup. It is declared here but
+# applied CONDITIONALLY in app/build.gradle.kts — see the comment there.
+firebaseBom = "34.17.0"
+googleServices = "4.5.0"
+
 [libraries]
 androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigationCompose" }
 androidx-lifecycle-viewmodel-compose = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "lifecycle" }
@@ -80,9 +92,13 @@ androidx-camera-camera2 = { group = "androidx.camera", name = "camera-camera2", 
 androidx-camera-lifecycle = { group = "androidx.camera", name = "camera-lifecycle", version.ref = "camerax" }
 androidx-camera-view = { group = "androidx.camera", name = "camera-view", version.ref = "camerax" }
 kotlin-reflect = { group = "org.jetbrains.kotlin", name = "kotlin-reflect", version.ref = "kotlin" }
+firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
+# No version: the BOM above supplies it.
+firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+google-services = { id = "com.google.gms.google-services", version.ref = "googleServices" }

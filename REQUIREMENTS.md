@@ -31,8 +31,8 @@ Legend — **Blocks:** what cannot be completed. **Needs:** the requirement itse
 
 | id | Item | Needs | Blocks | Phase |
 |---|---|---|---|---|
-| REQ-7 | FCM push | **THE ONE BLOCKER ON PUSH.** Firebase project + `google-services.json` (gitignored). SDK settled 2026-08-03 as FCM (DECISIONS.md D-016, which also records the OEM-battery-killer and no-Play-Services risks). The client half — channel, service, tap payload, deep link — can be built without it. | Receiving an actual notification | 7 |
-| REQ-8 | Backend device registration | Backend decision on `/v1/me/devices` — `platform` discriminator vs sibling route (`QUESTIONS.md` Q1) | The registration call only; token retrieval and display are unblocked | 7 |
+| REQ-7 | FCM push | **NOT the only blocker — see FINDINGS.md F-39.** Firebase project + `google-services.json` (gitignored; the build applies the google-services plugin only if the file is present, so dropping it in is the whole change). SDK settled 2026-08-03 as FCM (DECISIONS.md D-016, which also records the OEM-battery-killer and no-Play-Services risks). The client half — channel, service, tap payload, deep link, token store, sign-out de-registration — was **built 2026-08-03** without it. | Receiving an actual notification | 7 |
+| REQ-8 | Backend device registration | Backend decision on `/v1/me/devices` — `platform` discriminator vs sibling route (`QUESTIONS.md` Q1). The backend also has **no FCM send path at all today** (FINDINGS.md F-39), so this is larger than a schema change. | The registration call only; it is written, wired and gated behind one boolean (`PushTokenRegistrar.backendAcceptsFcmTokens`) | 7 |
 | REQ-9 | Play signing identity | Upload key + Play Console entry | Any release build. Debug is unaffected. | later |
 | REQ-10 | Real ToS / Privacy PDFs | Veritas documents (`QUESTIONS.md` Q4) | Nothing — placeholders ship, swap on both platforms together | 8 |
 | REQ-11 | Test caregiver account | **MET 2026-08-02.** `android.test@memoria.local` created against local Supabase via the admin API (email pre-confirmed, so no mail loop). Signs in from the app. | — | 2 |
@@ -115,8 +115,10 @@ detection run), REQ-22 (avatar renderer wired; server side proven, client side
 unproven — see F-21).
 
 **Blocked on Aryaman, not on work:**
-- **REQ-7** — `google-services.json`. The only true blocker on push.
-- **REQ-8 / Q1** — the `/v1/me/devices` shape. Blocks registration alone.
+- **REQ-7** — `google-services.json`. Blocks *receiving* a push. The client is
+  built and the build tolerates the file's absence.
+- **REQ-8 / Q1** — the `/v1/me/devices` shape. Blocks registration alone, and
+  the backend needs an FCM send path as well as a contract (FINDINGS.md F-39).
 - **REQ-10 / Q4** — the real Veritas legal documents. Placeholders ship and are
   verified rasterising on a device; swap on both platforms together.
 - **REQ-17 / Q5** — the Android sensor-setup step 2 interaction.

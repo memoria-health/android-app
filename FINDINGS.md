@@ -345,6 +345,12 @@ failed roughly one in five. Cause looks like mock-backend and real-file-I/O
 races. Recorded rather than absorbed, because a suite that fails one run in five
 teaches people to re-run instead of read.
 
+**Seen again 2026-08-03**, on a run with no code change that could touch it: 2065
+tests, 1 failed; `--rerun-tasks` immediately after gave 2065/2065. Which test
+failed is unknown — the rerun overwrote the HTML report before it was read, which
+is itself the trap this finding describes. Next occurrence: read
+`app/reports/tests/testDebugUnitTest/index.html` **before** re-running.
+
 ---
 
 

@@ -183,6 +183,24 @@ until day 9."
 
 ### Standing commands
 
+**The build needs two things this Mac does not provide by default**, and a shell
+that lacks either fails in a way that does not name the cause:
+
+```bash
+# JDK. `/usr/libexec/java_home` reports 15, 13 and 8 — Gradle needs 17+, and says
+# only "Your build is currently configured to use JVM 15". The 17 on this machine
+# is not registered with java_home and will not be found by searching the usual
+# places:
+export JAVA_HOME=~/Library/Java/temurin17/Contents/Home
+
+# SDK. Without it: "SDK location not found". Fixed durably by `local.properties`
+# (gitignored, per-machine) holding `sdk.dir=...`, so it survives a fresh shell.
+```
+
+Both were exported by hand in the session that set this up, so they silently
+stopped existing the moment a shell restarted. `local.properties` now covers the
+SDK half permanently; `JAVA_HOME` still has to be exported per shell.
+
 ```bash
 export ANDROID_HOME=~/Library/Android/sdk
 $ANDROID_HOME/emulator/emulator -avd nemara_pixel -no-snapshot-load -no-boot-anim &
