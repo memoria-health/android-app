@@ -29,6 +29,14 @@ import com.memoria.caregiver.ui.components.NemaraButtonVariant
 import com.memoria.caregiver.ui.components.NemaraEyebrow
 import com.memoria.caregiver.ui.home.RosterViewModel
 import com.memoria.caregiver.ui.nav.AuthNavHost
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import com.memoria.caregiver.ui.events.EventDetailScreen
+import com.memoria.caregiver.ui.events.EventDetailViewModel
+import com.memoria.caregiver.ui.events.EventReviewScreen
+import com.memoria.caregiver.ui.events.EventReviewState
 import com.memoria.caregiver.ui.events.EventsListViewModel
 import com.memoria.caregiver.ui.nav.MainShell
 import com.memoria.caregiver.ui.cameras.CameraListScreen
@@ -41,6 +49,8 @@ import androidx.compose.material3.ModalBottomSheet
 import com.memoria.caregiver.ui.settings.DataCollectionConsentSheet
 import com.memoria.caregiver.ui.settings.patientDisplayName
 import com.memoria.caregiver.ui.settings.PatientSettingsScreen
+import com.memoria.caregiver.ui.support.SupportContactScreen
+import com.memoria.caregiver.ui.support.SupportContactViewModel
 import com.memoria.caregiver.ui.settings.PatientSettingsViewModel
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -102,6 +112,11 @@ class MainActivity : ComponentActivity() {
         )[AppSettingsViewModel::class.java]
 
         setContent {
+            // Contact support is a full-surface sheet over the signed-in app, so
+            // the flag lives above both shells rather than inside either.
+            var showSupport by androidx.compose.runtime.remember {
+                androidx.compose.runtime.mutableStateOf(false)
+            }
             // The real analytics transport lands in Phase 8. Until then the
             // no-op sink keeps every component's internal logging call valid
             // without inventing a half-built pipeline.
@@ -133,8 +148,29 @@ class MainActivity : ComponentActivity() {
                                     onAddPatient = {},
                                     onEditProfile = {},
                                     onPrivacy = {},
-                                    onContactSupport = {},
+                                    onContactSupport = { showSupport = true },
                                 )
+                                if (showSupport) {
+                                    val supportViewModel: SupportContactViewModel = viewModel(
+                                        factory = viewModelFactory {
+                                            initializer { SupportContactViewModel(env.api) }
+                                        },
+                                    )
+                                    val supportState by supportViewModel.state.collectAsState()
+                                    // `dismissed` covers both exits: Cancel, and
+                                    // the short dwell after a successful send that
+                                    // lets the caregiver read the confirmation.
+                                    LaunchedEffect(supportState.dismissed) {
+                                        if (supportState.dismissed) showSupport = false
+                                    }
+                                    SupportContactScreen(
+                                        state = supportState,
+                                        onSubjectChange = supportViewModel::onSubjectChange,
+                                        onMessageChange = supportViewModel::onMessageChange,
+                                        onSend = supportViewModel::send,
+                                        onCancel = supportViewModel::cancel,
+                                    )
+                                }
                             },
                         )
                     }
@@ -330,11 +366,60 @@ private fun PatientTabs(
         },
     )
 
-    // The detail sheet is not wired yet, so the open-event latch must still be
-    // released or the Events feed poll stays paused forever (the ViewModel
-    // pauses it while a detail is up).
-    if (openEvent != null) {
-        LaunchedEffect(openEvent) { eventsViewModel.closeEvent() }
+    // The event stack: list -> detail -> review. Rendered over the shell rather
+    // than as tabs, mirroring iOS's sheet from PatientEventsView.
+    //
+    // `closeEvent()` is what releases the events feed poll, which the ViewModel
+    // pauses while a detail is up. Every exit from this stack goes through it.
+    val event = openEvent
+    if (event != null) {
+        var reviewing by remember(event.id) { mutableStateOf(false) }
+
+        if (reviewing) {
+            var review by remember(event.id) { mutableStateOf(EventReviewState(event)) }
+            EventReviewScreen(
+                state = review,
+                onChoiceChange = { review = review.copy(choice = it) },
+                onNotesChange = { review = review.copy(notes = it) },
+                onSubmit = {
+                    // submitReview writes optimistically and nulls openEvent
+                    // itself, so the whole stack closes and the poll resumes.
+                    eventsViewModel.submitReview(event, review.choice, review.notes)
+                },
+                onBack = { reviewing = false },
+            )
+        } else {
+            val detailViewModel: EventDetailViewModel = viewModel(
+                key = "eventDetail:${'$'}{event.id}",
+                factory = viewModelFactory {
+                    initializer { EventDetailViewModel(env.api, patientId, event) }
+                },
+            )
+            val detailState by detailViewModel.state.collectAsState()
+            EventDetailScreen(
+                state = detailState,
+                onBack = eventsViewModel::closeEvent,
+                onReviewEvent = { reviewing = true },
+                // No video player is built yet. An explicit placeholder rather
+                // than a blank box, so "this build cannot play clips" cannot be
+                // mistaken for "this event has no clip" — the detail screen has
+                // a real, separate empty state for the latter.
+                clipPlayer = { ClipPlayerStub() },
+            )
+        }
+    }
+}
+
+/** Stands in for the clip player until one is built. */
+@androidx.compose.runtime.Composable
+private fun ClipPlayerStub() {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(Spacing.xl),
+        verticalArrangement = Arrangement.spacedBy(Spacing.sm, Alignment.CenterVertically),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        NemaraEyebrow("Clip")
+        Text(text = "Playback is not built yet", style = NemaraType.body, color = Ink)
     }
 }
 

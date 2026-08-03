@@ -295,6 +295,27 @@ either way.
 
 ---
 
+### F-20 — A duplicate status bar renders at the bottom of the support screen
+**Integration · Minor · OPEN, cause not identified**
+
+With `SupportContactScreen` on screen, a strip carrying the status-bar icons
+(wifi, signal, battery and a clock glyph) is drawn near the BOTTOM of the
+window, just above the navigation bar. Reproduced twice, two seconds apart. It
+is gone the moment Cancel returns to Settings, and no other screen shows it, so
+it tracks this screen rather than the device.
+
+**Not diagnosed.** The plausible causes are an inset the screen consumes
+differently from every other full-surface screen, or a Compose window-inset
+interaction with the way it is presented over `MainShell` rather than as a
+route. I stopped short of guessing further because the fix depends on which.
+
+Cosmetic and non-blocking — the screen is usable, its fields and both actions
+work, and Cancel exits correctly — but it is exactly the kind of thing a
+screenshot parity pass exists to catch, and it should be understood rather than
+nudged until it disappears.
+
+---
+
 ### F-3 — Scene luma is measured on a different scale than iOS
 **Phase 6 · Important · CONFIRMED 2026-08-02 · needs a device to fix correctly**
 
