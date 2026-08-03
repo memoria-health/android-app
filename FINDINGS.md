@@ -33,6 +33,63 @@ into a file — is the finding that matters most here.**
 
 ## OPEN
 
+### F-40 — The Live tab is a stub: 5,791 lines of live video are built, tested and unreachable
+**Phase 4 · Critical for the product · OPEN — client work, doable now**
+
+Found by a reachability audit rather than by use: for every `*Screen` composable,
+count the callers that are not its own declaration. Two came back zero, and one
+of them matters a great deal.
+
+`PatientShell` takes a `liveContent` slot. `MainActivity:586` fills it with:
+
+```kotlin
+liveContent = { TabStub("Live") },
+```
+
+So tapping **Live** — the tab that answers "is my mother alright *right now*",
+which is most of why this product exists — renders a placeholder.
+
+**Everything behind it exists.** 18 files in `ui/live/` and 8 in `data/livekit/`,
+5,791 lines, 23 test files: `LiveVideoScreen`, `LiveFullScreenView`,
+`LiveVideoRenderer`, `BlurredVideoView`, `RenderWatchdog`, `DesyncReconciler`,
+`TalkMode`, `SensitiveRoomAckStore`, `AudioGate`, `AudioRouting`,
+`LiveKitConnection`. The LiveKit SDK (2.27.0) is a real dependency, and
+`LiveKitClient` is a real class, not a stub.
+
+**What is missing is small and specific**, which is what makes this the next
+piece of work rather than a phase:
+
+1. `AppEnvironment` never constructs a `LiveKitClient`. PARITY.md §35 lists
+   `liveKit: LiveKitClient` as an environment member; grepping `AppEnvironment.kt`
+   for it returns nothing at all.
+2. There is no `LiveViewModel` — `ui/live/` contains state types and composables
+   and no producer. Same shape as the defect F-26 found in password reset: a
+   complete screen, a complete client, and nothing joining them.
+3. `MainActivity` passes the stub instead of a host.
+
+**This is knock-on, not isolated.** `WanderingDoorPickerScreen` is the other
+zero-caller screen, and `CameraHosts` deliberately shows `NotBuiltScreen` in its
+place with an honest reason: picking exit doors needs a still frame from the live
+feed. Wiring Live unblocks the door picker too.
+
+**Already known, but not where anyone would find it.** F-10's closing note says
+"the Live tab needs LiveKit in the graph" — one clause inside a CLOSED finding
+titled *21 of 24 screens are unreachable*. A closed finding is the one place a
+reader will not look for open work. That is why this has its own entry.
+
+**Not a parity defect against the pin**, and worth saying: the port did not skip
+this. It is the last unwired feature family, and the reason it was left is that
+validating it end to end needs REQ-2 (a real camera publishing `cam_*`) or REQ-13
+(a synthetic publisher). Wiring can be done and unit-tested now; *proving* it
+works cannot.
+
+**Failure guarded:** "every screen is ported" and "every screen is reachable" are
+different claims, and the second one decays silently as slots get filled with
+stubs. The audit that found this is three lines of shell and should be run at
+every phase end — added to HARNESS.md §4c.
+
+---
+
 ### F-3 — Scene luma is measured on a different scale than iOS
 **Phase 6 · Important · CONFIRMED 2026-08-02 · needs a device to fix correctly**
 
@@ -372,76 +429,6 @@ sets `KeyboardType.Password` and `semantics { password() }` but never
 not offer a Compose `BasicTextField` without them. iOS gets it free from
 `SecureField`. For a population that skews older and uses generated passwords,
 that is a sign-in failure.
-
----
-
-### F-38 — A locked phone shows the patient's name and the full event narrative
-**Backend · product + DPDP decision · FIXED 2026-08-03 — option 2 chosen by Aryaman**
-
-**Resolution.** The body is now the patient's preferred name alone:
-
-```python
-body=patient.preferred_name,
-```
-
-One change, in `nemara-backend/src/services/push.py`, and it fixes **both**
-platforms at once — neither client composes notification text. iOS renders the
-APNs `aps.alert` the system hands it (`AppDelegate` only handles taps and
-foreground presentation), and Android carries the server's strings through
-verbatim by design. There was no iOS change to make and no Android change to
-make; the ask was a one-repo change wearing a two-repo costume.
-
-Checked before shipping, not assumed: event titles come from `_event_title_for`
-and are always generic (`"Possible fall"`, or `"Possible <detector name>"` for
-customs). They carry no name and no narrative, so title + name discloses less
-than the title alone might have. `preferred_name` is a non-null column, so the
-body can never arrive blank.
-
-The test now asserts the exact body **and** that the narrative appears nowhere in
-the serialised payload — the equality alone would have passed if someone changed
-the seeded narrative instead of the code.
-
-Residual, and accepted with the choice: the alert still says a named person is
-being monitored and roughly what happened, since the title names the event type.
-Option 1 was the only one that removed that, and it costs the glanceability the
-product is largely for.
-
-The original finding follows.
-
----
-
-`nemara-backend/src/services/push.py:194`:
-
-```python
-body=f"{patient.preferred_name} — {event.narrative}",
-```
-
-With the phone's default notification setting, a **locked** screen shows both.
-Verified in the backend source, not inferred:
-
-> **Fall detected**
-> Margaret — Margaret fell in the kitchen and has not got up.
-
-No unlock, no authentication. Anyone who can see the phone can read that a named
-person with dementia fell, and where. **This is already live on iOS** — the
-Android port did not introduce it and does not make it worse.
-
-**Not fixed, on purpose.** A client-side truncation would silently diverge the
-two platforms and leave iOS untouched, which is worse than the current state
-being visible. The real options, for whoever decides:
-
-1. Send a generic body (`"New alert — open Memoria"`) and keep the detail behind
-   the app. Safest; costs glanceability, which is much of the product's value.
-2. Keep the name, drop the narrative. A middle ground that still discloses that
-   a named person is being monitored.
-3. Keep it and set `visibility = SECRET` on Android so the system hides content
-   on the lock screen. **Android-only** — iOS has no equivalent the app controls,
-   so the platforms would then genuinely differ, and that would need recording.
-
-The Android client's own conduct is clean: it carries the server's `title` and
-`body` verbatim as opaque strings, never derives text from cached patient data,
-logs nothing from `push/`, and leaves `visibility` at the platform default so the
-caregiver's own "sensitive content" setting governs.
 
 ---
 
@@ -1349,7 +1336,36 @@ to another, and a top-of-funnel we cannot see on either platform.
 ---
 
 ### F-38 — A push puts the patient's name and the event narrative on the lock screen
-**Phase 7 · Critical · REPORTED, NOT FIXED — product + DPDP decision**
+**Phase 7 · Critical · FIXED 2026-08-03 — Aryaman chose "name, no narrative"**
+
+**Resolution.** `nemara-backend` commit `3b9c52f`:
+
+```python
+body=patient.preferred_name,
+```
+
+One change, in one repo, fixes **both** platforms — neither client composes
+notification text. iOS renders the `aps.alert` the system hands it (`AppDelegate`
+only handles taps and foreground presentation) and the Android client carries the
+server's strings verbatim by design, which is exactly the property that made this
+a backend-only change. There was no client edit to make on either platform.
+
+Checked before shipping rather than assumed: `_event_title_for` titles are always
+generic (`"Possible fall"`, or `"Possible <detector name>"` for customs), so the
+title carries no name and no narrative; and `preferred_name` is a non-null column,
+so the body cannot arrive blank. The test asserts the exact body **and** that the
+narrative appears nowhere in the serialised payload — the equality alone would
+still pass if someone changed the seeded narrative instead of the code.
+
+Residual, accepted with the choice: the alert still discloses that a named person
+is being monitored and roughly what happened, because the title names the event
+type. Only the generic-body option removed that, and it costs the glanceability
+the product is largely for.
+
+**The original finding follows, unedited.** It is kept in full because the
+reasoning about *why a port does not get to make this call* is the reusable part.
+
+---
 
 Found while building the Android push client, by reading what the backend
 actually sends rather than what the client does with it.
@@ -1411,37 +1427,10 @@ precisely the change a well-meaning person would make later.
 
 ---
 
-### F-39 — The backend has no FCM path at all, so `google-services.json` alone will not deliver a push
-**Phase 7 · High · OPEN — backend work, not client work**
-
-REQUIREMENTS.md REQ-7 calls `google-services.json` "THE ONE BLOCKER ON PUSH".
-Reading `nemara-backend/src/` while wiring the client shows that is understated.
-The backend is **APNs-only, end to end**:
-
-- `src/services/push.py` mints an Apple ES256 provider JWT, POSTs over HTTP/2 to
-  `api.push.apple.com` or `api.sandbox.push.apple.com`, and treats a 410 as
-  "delete this row". There is no Firebase dependency, no service-account key, no
-  FCM send anywhere in the tree.
-- `src/db/caregiver_device.py` has one token column, `apns_token`, plus an
-  `environment` column constrained to `sandbox | production`.
-- `src/api/devices.py` and `src/schemas/devices.py` accept exactly that shape.
-
-So an Android device that registered successfully today would have its FCM token
-stored in `apns_token`, POSTed to Apple, rejected, and — on the 410 — its row
-deleted. **The "harmless" version of guessing the contract is a device that
-registers itself and is silently unregistered again**, which is indistinguishable
-from push simply not working.
-
-This is why `PushTokenRegistrar.backendAcceptsFcmTokens` is false and nothing is
-sent, rather than the client sending hopefully and letting the server sort it
-out.
-
-**What the backend needs, in addition to REQ-7:** a `platform` discriminator (or
-a sibling route), a token column that is not named for Apple, a nullable
-`environment`, an FCM send path with a service-account credential, and a decision
-about what an Android payload looks like given F-38.
-
-**Failure guarded:** the belief that dropping one JSON file into `app/` turns
-push on.
+*(F-39 — the backend has no FCM path at all, so `google-services.json` alone will
+not deliver a push — was written here during the Phase 7 push work and again
+under `## OPEN`, and the two copies drifted apart. The full entry is the one
+under `## OPEN`, where an open finding belongs. Left as a plain pointer, not a
+heading, so that `grep '^### F-'` stays a reliable list of unique ids.)*
 
 ---

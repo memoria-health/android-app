@@ -257,6 +257,42 @@ each unmatched name resolves to exactly one of:
 `PARITY.md` §29 enumerates *behaviours* that must survive the port. Nothing
 enumerated *files*, and that was the hole.
 
+### The second half of the gate: a file existing is not a file being reached
+
+Added 2026-08-03, after the audit that produced F-40. The sweep above proves a
+Swift file has an Android counterpart. It says nothing about whether anything
+ever *calls* that counterpart, and the port has now produced that defect twice:
+`ResetPasswordScreen` (292 lines, working ViewModel methods, and the password
+reset email opened nothing — F-26) and the entire Live tab (5,791 lines behind a
+`TabStub` — F-40).
+
+Both compile. Both are fully unit-tested. Neither is reachable by a caregiver.
+**A test suite cannot catch this**, because the tests call the screen directly —
+that is what makes them unit tests. The only thing that catches it is asking who
+else calls it:
+
+```bash
+for f in $(grep -rl "^fun .*Screen(\|^internal fun .*Screen(" \
+    app/src/main/java --include=*.kt); do
+  name=$(grep -o "fun [A-Za-z]*Screen(" $f | head -1 | sed 's/fun //;s/(//')
+  [ -z "$name" ] && continue
+  callers=$(grep -rn "\b$name(" app/src/main/java --include=*.kt \
+    | grep -v "fun $name(" | wc -l | tr -d ' ')
+  printf "%-34s callers=%s\n" "$name" "$callers"
+done | sort -t= -k2 -n
+```
+
+Zero callers means one of: reachable under a wrapper the regex missed (check by
+hand), deliberately stubbed with a recorded reason (`WanderingDoorPickerScreen`
+is — `CameraHosts` shows `NotBuiltScreen` and says why), or **unwired**, which is
+a `FINDINGS.md` row.
+
+Run the same shape over `NemaraApiClient`'s public methods. Doing that turned up
+`loadMoreEvents` with no production caller — and then reading the Swift showed
+`loadEventsPage` has no view calling it either, so the Android side is *correct*
+and the pagination is unused on both platforms. Recorded here so it is not
+re-discovered as a defect a third time.
+
 ---
 
 ## 4d. Mutation testing must confirm the test RAN, not just that nothing failed
