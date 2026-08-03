@@ -39,6 +39,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import com.memoria.caregiver.legal.LegalConstants
 import com.memoria.caregiver.ui.components.NemaraButton
 import com.memoria.caregiver.ui.components.NemaraButtonSize
 import com.memoria.caregiver.ui.components.NemaraButtonVariant
@@ -59,28 +60,16 @@ import kotlinx.coroutines.flow.first
 // The documents
 // ---------------------------------------------------------------------------
 
-/** One reviewable legal document. iOS: `LegalConstants.Doc`. */
-private data class LegalDocument(
-    val id: String,
-    val title: String,
-    /** Bundle/asset resource name, without the `.pdf` extension. */
-    val resource: String,
-)
-
 /**
  * iOS: `LegalConstants.documents`.
  *
- * Deliberately **private to this file**, not a public `LegalConstants` object.
- * The other half of `LegalConstants` — `currentTosVersion` — is consumed by
- * sign-up, not by this screen, and this port task owns two files. Putting a
- * public `LegalConstants` in `ui.auth` would also race the sign-up screen, which
- * is being written concurrently and needs the same constant. It needs a home the
- * orchestrator owns; see the handoff notes.
+ * These were declared privately here while this file was being written, because
+ * that port task owned only two files. They now come from [LegalConstants],
+ * which is where the version string the sign-up call sends lives too — the
+ * document a caregiver reads and the version recorded against their account have
+ * to be two halves of one definition, or they can drift.
  */
-private val LegalDocuments = listOf(
-    LegalDocument(id = "terms", title = "Terms of Service", resource = "terms"),
-    LegalDocument(id = "privacy", title = "Privacy Notice", resource = "privacy"),
-)
+private val LegalDocuments = LegalConstants.documents
 
 // ---------------------------------------------------------------------------
 // The gate
@@ -113,9 +102,11 @@ private val LegalDocuments = listOf(
  * seam, the same shape as the injected avatar renderer in DIFFERENCES.md D8.
  *
  * **The default returns no pages**, which lands on the same `.failed` branch iOS
- * takes when the bundle resource is missing — honest, because the two PDFs are
- * not in the Android resources yet. The real loader must be provided before this
- * screen ships.
+ * takes when the bundle resource is missing. It is a test seam and a fallback,
+ * not the shipping path: the sign-up flow passes [PdfPageLoader], which reads the
+ * two PDFs out of `assets/legal/`. A caller that forgets to pass one gets a gate
+ * that shows its error state and can never be satisfied, so nothing that reaches
+ * a caregiver may rely on the default.
  *
  * @param onCancel the sheet's Cancel action. iOS dismisses without agreeing.
  * @param onAllDocumentsReviewed fires once, when the last unread document
@@ -287,7 +278,7 @@ fun TermsGateScreen(
  */
 @Composable
 private fun DocumentPicker(
-    documents: List<LegalDocument>,
+    documents: List<LegalConstants.Doc>,
     selected: String,
     reviewed: List<String>,
     onSelect: (String) -> Unit,

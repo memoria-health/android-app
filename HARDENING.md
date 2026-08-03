@@ -165,10 +165,23 @@ sees for the same server response.
 ---
 
 ## H-9 — The terms gate ships bricked
-**Phase 2 · REOPENED 2026-08-02** — the PDFs are vendored and byte-identical,
-but `PdfPageLoader` has **zero production callers**, so `TermsGateScreen`'s
-`pageSource` default `{ emptyList() }` fires and `canAccept` can still never
-become true. Bricked again, by a different cause. The gate is also unreachable
+**Phase 2 · FIXED 2026-08-03** — the gate is reachable and satisfiable.
+`AuthNavHost` builds a `PdfPageLoader` and hands it to `TermsGateScreen` as
+`pageSource`, so the default that returns nothing no longer fires on any path a
+caregiver walks. `AuthNavHostTest` proves the production loader ran by asserting
+it staged both bundled PDFs, byte-identical, out of `assets/legal/`.
+
+Still open in the ORIGINAL sense, unchanged: these are placeholders (version
+`2026-07-26-placeholder`) and the real Veritas documents must replace them on
+both platforms together — REQ-10. Also unverified by any test: `PdfRenderer`
+itself, which Robolectric cannot run (see FINDINGS.md F-27), so the rasterised
+pages want one look on a device.
+
+**The 2026-08-02 reopening, for the record** — the PDFs were vendored and
+byte-identical, but `PdfPageLoader` had **zero production callers**, so
+`TermsGateScreen`'s `pageSource` default `{ emptyList() }` fired and `canAccept`
+could still never become true. Bricked again, by a different cause. The gate was
+also unreachable
 (FINDINGS.md F-27), so the ToS and privacy consent that ships enforced on
 backend, web and iOS has no Android enforcement path at all.
 

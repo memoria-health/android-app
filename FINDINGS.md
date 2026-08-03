@@ -482,7 +482,25 @@ nothing.
 ---
 
 ### F-27 — Account creation is a loop, so no Android account can be made
-**Phase 2 · Critical · OPEN**
+**Phase 2 · Critical · FIXED 2026-08-03**
+
+All four pieces are wired. `SIGN_UP` now renders `SignUpDestination` (the real
+`SignUpScreen`, with `TermsGateScreen` drawn over it when the terms row is
+tapped, as iOS presents it as a sheet). `LegalConstants` has an Android home at
+`com.memoria.caregiver.legal`, holding the version string the sign-up call sends
+and the document list the gate renders — `TermsGateScreen`'s private copy of that
+list is gone. `PdfPageLoader` is constructed by the host and passed as the gate's
+`pageSource`, so the gate reads the bundled PDFs instead of its empty default.
+`AuthNavHostTest` walks Welcome → Create an account → the form → the gate and
+asserts the loader staged both real documents; `SignUpDestinationTest` covers the
+three ways out of the gate, only one of which is consent.
+
+**One thing this did not prove:** `PdfRenderer` does not work under Robolectric
+(constructor dies on recent SDK levels, stubbed to zero pages on older ones), so
+no unit test can watch a page rasterise. Everything up to the platform call is
+tested; the rasterisation itself still needs a look on a device.
+
+**Original entry, for the record:**
 
 `AuthNavHost`'s `SIGN_UP` route renders `WelcomeScreen` again, whose `onSignUp`
 pops back. Welcome → "Create an account" → an identical Welcome. The

@@ -78,8 +78,49 @@ class AuthViewModel(private val auth: SupabaseAuthService) : ViewModel() {
         _signUp.value = state
     }
 
+    // One setter per field rather than the whole-state [onSignUpChange] above.
+    // A caller holding a state object it read earlier — a composition snapshot
+    // is one — writes back a copy of a value that may already be stale, and the
+    // edit it was carrying wins over anything set in between. Each of these
+    // reads the current value at the moment it writes, so no edit can be lost.
+
+    fun onSignUpDisplayNameChange(value: String) {
+        _signUp.value = _signUp.value.copy(displayName = value, form = clearedError(_signUp.value.form))
+    }
+
+    fun onSignUpEmailChange(value: String) {
+        _signUp.value = _signUp.value.copy(email = value, form = clearedError(_signUp.value.form))
+    }
+
+    fun onSignUpPhoneChange(value: String) {
+        _signUp.value = _signUp.value.copy(phone = value, form = clearedError(_signUp.value.form))
+    }
+
+    fun onSignUpCountryChange(value: String) {
+        _signUp.value = _signUp.value.copy(countryCode = value)
+    }
+
+    fun onSignUpPasswordChange(value: String) {
+        _signUp.value = _signUp.value.copy(password = value, form = clearedError(_signUp.value.form))
+    }
+
+    /**
+     * The caregiver read both legal documents and agreed. Set only from the
+     * consent gate's Agree action — never from the form, which is what keeps
+     * consent something that was given rather than something assumed.
+     */
+    fun onSignUpTermsAccepted() {
+        _signUp.value = _signUp.value.copy(acceptedTerms = true)
+    }
+
     fun submitSignUp(confirmPassword: String, tosVersion: String) {
         val state = _signUp.value
+        // Same guard as [submitLogin], and the same reason: the button is
+        // disabled, but a stale recomposition or a test could still call this,
+        // and a second in-flight sign-up would race the first. `isBusy` is one
+        // of the terms, so the in-flight form cannot fire again.
+        if (!signUpCanSubmit(state, confirmPassword)) return
+
         _signUp.value = state.copy(form = state.form.copy(isBusy = true, errorMessage = null))
         viewModelScope.launch {
             try {
