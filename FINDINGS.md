@@ -230,6 +230,54 @@ they did not make.
 
 ---
 
+### F-18 — Every toggle in the app was invisible to a screen reader
+**Phase 1 · Important · FIXED 2026-08-02, found while testing the blur gate**
+
+`NemaraToggle` used `Modifier.clickable(role = Role.Switch)`. That declares "this
+is a switch" and publishes **no `ToggleableState`**, so TalkBack announced the
+control as a switch and then could not say whether it was on or off. Every
+toggle in the app was affected — people-blur, audio capture, every detector's
+on/off, email alerts.
+
+`Modifier.toggleable` gives the same tap and publishes the state. One-line fix,
+45-ish call sites improved, no behaviour change for sighted users.
+
+**Found by accident**, which is the part worth recording: writing the first
+render test for `PeopleBlurCard` meant asserting `assertIsOn()` / `assertIsOff()`
+on the switch, and those assertions cannot pass against a `clickable`. Nothing
+else in 1751 tests had ever asked a toggle what state it was in.
+
+Caregivers skew older and are a population disproportionately likely to be using
+a screen reader, so this is not a theoretical accessibility box-tick.
+
+---
+
+### F-19 — The people-blur toggle no longer claims to be on
+**Phase 4 · H-12 / REQ-23 · FIXED 2026-08-02**
+
+The pipeline is complete and tested (box maths, padding, hold and decay,
+downscale-blur composition, I420→ARGB, 59 tests) and `PersonDetector` has no
+implementation, so the toggle blurred nothing while showing on.
+
+`PeopleBlurAvailability.IS_AVAILABLE` is now the single build-time fact, read by
+the card. While false the switch renders **off regardless of the stored
+preference**, is non-interactive, writes nothing when tapped, and the copy says
+"Not available in this version yet". The card stays visible rather than hidden,
+so the control is discoverable — what must not happen is it reading as on.
+
+A stored `true` cannot make the feature real, which is why the card derives
+`effectivelyOn = enabled && available` rather than trusting the store.
+
+When a detector is vendored, flipping that one constant re-enables it with no
+other edit. H-12's underlying cause (REQ-23, no model) is unchanged and still
+open; what is closed is the toggle lying about it.
+
+**The card had no tests at all before this.** That is how a privacy control's
+behaviour could have been changed, or the gate later removed, with a green suite
+either way.
+
+---
+
 ### F-3 — Scene luma is measured on a different scale than iOS
 **Phase 6 · Important · CONFIRMED 2026-08-02 · needs a device to fix correctly**
 

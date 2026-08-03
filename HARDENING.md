@@ -226,6 +226,11 @@ back. Each screen draws its own because there is no shared top bar yet.
 
 ## H-12 — The people-blur toggle currently blurs nothing
 **Phase 4 · found by review · BLOCKS the feature · REQ-23**
+**PARTIALLY FIXED 2026-08-02** — the toggle no longer claims to be on. It is
+shown off and non-interactive while `PeopleBlurAvailability.IS_AVAILABLE` is
+false, with copy saying so, and six render tests pin it (FINDINGS.md F-19). The
+underlying cause is unchanged: there is still no model, so the feature still
+cannot work. What is closed is the control misrepresenting that.
 
 `PersonDetector` is an interface with no implementation and `BlurredVideoView`
 is never called from any screen. Everything around it is real and tested — box

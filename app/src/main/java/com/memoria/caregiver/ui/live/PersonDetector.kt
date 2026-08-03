@@ -134,3 +134,24 @@ object PersonBoxMath {
         )
     }
 }
+
+/**
+ * Whether people-blur can actually blur anything on this build.
+ *
+ * **One flag, read by the UI, so the toggle cannot claim to be on while the
+ * pipeline is inert.** [PersonDetector] has no implementation (REQ-23), so
+ * today this is false everywhere. It is a `const` rather than a runtime probe
+ * because the model's presence is a build-time fact: it either ships in the APK
+ * or it does not.
+ *
+ * The failure this exists to prevent (HARDENING.md H-12): a caregiver turns on
+ * "Blur people" for a bedroom camera, the switch shows on, and the video is not
+ * blurred. **A privacy control that silently does nothing is worse than one that
+ * is visibly unavailable** — the first makes someone believe they are protected.
+ *
+ * When a detector is vendored, flip this to true in the same change that wires
+ * it, and the toggle re-enables itself with no other edit.
+ */
+object PeopleBlurAvailability {
+    const val IS_AVAILABLE: Boolean = false
+}

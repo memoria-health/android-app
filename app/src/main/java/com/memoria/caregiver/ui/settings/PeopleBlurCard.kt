@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import com.memoria.caregiver.ui.components.NemaraCard
+import com.memoria.caregiver.ui.live.PeopleBlurAvailability
 import com.memoria.caregiver.ui.components.NemaraToggle
 import com.memoria.caregiver.ui.theme.Action
 import com.memoria.caregiver.ui.theme.ActionSoft
@@ -49,7 +50,20 @@ fun PeopleBlurCard(
     enabled: Boolean,
     onEnabledChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
+    /**
+     * False while no person-detection model ships (REQ-23). The switch is then
+     * shown off and non-interactive, with copy saying so.
+     *
+     * Deliberately still VISIBLE rather than hidden: the caregiver should be
+     * able to see that the control exists and is coming. What must not happen is
+     * the switch reading as on while nothing is blurred — see HARDENING.md H-12.
+     */
+    available: Boolean = PeopleBlurAvailability.IS_AVAILABLE,
 ) {
+    // A stored preference cannot make the feature real. If the model is absent
+    // the card renders off whatever the store says, so the switch never
+    // contradicts the video.
+    val effectivelyOn = enabled && available
     NemaraCard(
         // iOS applies `.padding(.horizontal, 16)` to the card itself, so it
         // travels with the card rather than being the parent stack's job.
@@ -64,13 +78,13 @@ fun PeopleBlurCard(
                 modifier = Modifier
                     .size(38.dp)
                     .clip(RoundedCornerShape(11.dp))
-                    .background(if (enabled) ActionSoft else PaperDim),
+                    .background(if (effectivelyOn) ActionSoft else PaperDim),
                 contentAlignment = Alignment.Center,
             ) {
                 PersonGlyph(
                     size = 16.dp,
-                    color = if (enabled) Action else Ink3,
-                    filled = enabled,
+                    color = if (effectivelyOn) Action else Ink3,
+                    filled = effectivelyOn,
                 )
             }
 
@@ -80,7 +94,11 @@ fun PeopleBlurCard(
             ) {
                 Text(text = "Blur people", style = NemaraType.bodySemibold, color = Ink)
                 Text(
-                    text = if (enabled) {
+                    text = if (!available) {
+                        // Says what is true, and does not promise a date.
+                        "Not available in this version yet. When it arrives, it " +
+                            "will blur anyone in the live feed on this device only."
+                    } else if (enabled) {
                         "People in the live feed are blurred on this device. The room " +
                             "stays visible. This changes nothing about recording or what " +
                             "others see."
@@ -95,9 +113,10 @@ fun PeopleBlurCard(
             }
 
             NemaraToggle(
-                isOn = enabled,
+                isOn = effectivelyOn,
                 onToggle = onEnabledChange,
                 track = "people_blur.toggle",
+                enabled = available,
             )
         }
     }

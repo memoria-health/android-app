@@ -4,7 +4,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
@@ -67,13 +67,20 @@ fun NemaraToggle(
             .size(width = 40.dp, height = 24.dp)
             .clip(CircleShape)
             .background(if (isOn) Action else Line)
-            .clickable(
+            // `toggleable`, not `clickable`. Both give the tap; only `toggleable`
+            // publishes a ToggleableState, which is what a screen reader reads
+            // to say "on" or "off". With `clickable(role = Role.Switch)` the
+            // control announced itself as a switch and then could not say which
+            // way it was set — across every toggle in the app, including the
+            // privacy ones. Caregivers are exactly the population most likely to
+            // be using a screen reader.
+            .toggleable(
+                value = isOn,
                 interactionSource = interactionSource,
                 indication = null,
                 enabled = enabled,
                 role = Role.Switch,
-            ) {
-                val next = !isOn
+            ) { next ->
                 analytics.logToggle(track ?: "toggle", next)
                 onToggle(next)
             },
