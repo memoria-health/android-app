@@ -37,6 +37,9 @@ import com.memoria.caregiver.ui.detectors.PatientDetectorsScreen
 import com.memoria.caregiver.ui.detectors.PatientDetectorsViewModel
 import com.memoria.caregiver.ui.patient.PatientShell
 import com.memoria.caregiver.ui.patient.PatientViewModelScope
+import androidx.compose.material3.ModalBottomSheet
+import com.memoria.caregiver.ui.settings.DataCollectionConsentSheet
+import com.memoria.caregiver.ui.settings.patientDisplayName
 import com.memoria.caregiver.ui.settings.PatientSettingsScreen
 import com.memoria.caregiver.ui.settings.PatientSettingsViewModel
 import androidx.compose.runtime.LaunchedEffect
@@ -64,6 +67,11 @@ import androidx.compose.runtime.CompositionLocalProvider
  */
 class MainActivity : ComponentActivity() {
 
+    // ModalBottomSheet is still marked experimental in material3. Opted in at
+    // the one place it is used (the data-collection consent sheet) rather than
+    // module-wide, so the next experimental API someone reaches for still has to
+    // be a deliberate choice.
+    @androidx.compose.material3.ExperimentalMaterial3Api
     override fun onCreate(savedInstanceState: Bundle?) {
         // Light scrims on both bars: the app is light-mode only, so dark system
         // icons on Paper is the only correct combination.
@@ -145,6 +153,7 @@ class MainActivity : ComponentActivity() {
  * caregiver no longer has access to — and the honest response is to leave
  * rather than to render a shell around nothing.
  */
+@androidx.compose.material3.ExperimentalMaterial3Api
 @androidx.compose.runtime.Composable
 private fun PatientRoute(
     env: AppEnvironment,
@@ -172,6 +181,7 @@ private fun PatientRoute(
  * store owner ABOVE every `viewModel(...)` call — a CompositionLocal only
  * reaches composables nested inside the provider.
  */
+@androidx.compose.material3.ExperimentalMaterial3Api
 @androidx.compose.runtime.Composable
 private fun PatientTabs(
     env: AppEnvironment,
@@ -214,6 +224,30 @@ private fun PatientTabs(
             }
         },
     )
+
+    // First-open data-collection consent. Presented from the shell, as iOS does
+    // from PatientShell — not from the Settings tab — because it must appear
+    // when the caregiver first opens the patient, wherever they land.
+    val showConsent by patientSettingsViewModel.showDataCollectionConsent.collectAsState()
+    val settingsStateForConsent by patientSettingsViewModel.state.collectAsState()
+    if (showConsent) {
+        ModalBottomSheet(
+            // NOT onDecide(false). A swipe-away is the ABSENCE of an answer, and
+            // recording "no" for someone who only dismissed the sheet is still
+            // recording a decision they did not make. iOS sends nothing here
+            // either: decided_at stays null and the server default stays off.
+            onDismissRequest = patientSettingsViewModel::dismissDataCollectionConsent,
+            containerColor = Paper,
+            // The sheet draws the Swift's own capsule.
+            dragHandle = null,
+        ) {
+            DataCollectionConsentSheet(
+                patientName = patientDisplayName(settingsStateForConsent.patient),
+                mutation = settingsStateForConsent.dataCollection,
+                onDecide = patientSettingsViewModel::setDataCollectionEnabled,
+            )
+        }
+    }
 
     PatientShell(
         patient = patient,

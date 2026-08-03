@@ -183,6 +183,53 @@ unreliable exactly when several agents are finishing at once.
 
 ---
 
+### F-17 — The data-collection consent record has no version, and six smaller gaps
+**Product / backend · Important · raised 2026-08-02 while porting the sheet**
+
+`DataCollectionConsentSheet` is now ported verbatim and wired. Porting it
+surfaced seven things about the *consent design itself*. **None were changed** —
+they are product and backend decisions, and a port is the wrong place to make
+them. They are recorded because a port is a good place to notice them.
+
+**1. No consent version is stored, and this is the one that matters.** The
+decision is persisted as a boolean plus a `decided_at` timestamp. The ToS and
+privacy gate stores a version string (`"2026-07-26-placeholder"`); this does
+not. **If the wording ever changes, there is no record of which text any given
+caregiver agreed to.** Under DPDP, consent is to a stated purpose — a consent
+record that cannot reproduce the purpose it was given for is weak evidence at
+best. Both platforms are affected equally; it is a schema question, not an
+Android one.
+
+The other six, in the sheet's own copy or behaviour:
+
+2. No retention period, no purpose limit beyond "improve our understanding of
+   elderly health and disease", and nothing about what happens to already-stored
+   clips when the caregiver turns it off. "You can turn it off anytime" is
+   forward-looking only.
+3. Consent is captured from the **caregiver** alone. The person being recorded
+   is never named as a consenting party.
+4. "you can turn it off anytime in Settings" is shown to someone for whom
+   nothing is on yet, so it reads as though collection has already begun.
+5. The sheet promises "video and audio clips" unconditionally, but the audio
+   capture card can sever audio at the source, so the audio half may be untrue
+   for a given patient.
+6. While a decision is in flight both buttons are inert but visually unchanged,
+   and there is no spinner. Faithful to iOS — `NemaraButton` deliberately does
+   not dim when disabled — but on a slow network a caregiver taps "Share
+   recordings" and nothing appears to happen.
+7. The error line renders `ApiError.errorDescription` verbatim, i.e.
+   server-authored text inside a consent surface.
+
+**What the port does get right, and deliberately:** a swipe-away sends nothing.
+iOS presents the sheet without `interactiveDismissDisabled`, so dismissal is
+possible and means the absence of an answer — `decided_at` stays null and the
+server default stays off. The Android host passes
+`onDismissRequest = dismissDataCollectionConsent` and **not** `onDecide(false)`,
+because recording "no" for someone who only swiped is still recording a decision
+they did not make.
+
+---
+
 ### F-3 — Scene luma is measured on a different scale than iOS
 **Phase 6 · Important · CONFIRMED 2026-08-02 · needs a device to fix correctly**
 
