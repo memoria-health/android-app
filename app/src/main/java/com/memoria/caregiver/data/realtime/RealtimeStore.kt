@@ -116,6 +116,20 @@ class RealtimeStore(
      * No-op until the first bootstrap. Best-effort — the poll keeps state
      * correct regardless.
      */
+    /**
+     * [openChannels] launched on this store's own scope, so a stalled subscribe
+     * cannot hold the caller.
+     *
+     * The Swift is `Task { await self?.openRealtimeChannels() }` at the end of
+     * `bootstrap()`, and the detachment is the whole point: on 2026-07-28 the
+     * project's Realtime tenant was dead, the subscribe never returned, and an
+     * awaited call left sign-in on a spinner with a healthy roster already
+     * loaded. A hang is not an error, so no catch block ever ran.
+     */
+    fun openChannelsDetached() {
+        scope.launch(dispatcher) { openChannels() }
+    }
+
     suspend fun rebuildChannels() {
         if (cache.patients.isEmpty()) return // not bootstrapped / signed out
         closeChannels()

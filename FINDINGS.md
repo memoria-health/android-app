@@ -206,8 +206,18 @@ parameter are deleted. Recorded as DECISIONS.md D-014.
 **Phase 4 · Important · FIXED 2026-08-02**
 
 `LiveKitTokens` deleted; `LiveKitIdentity` is the single definition and now also
-carries the two role strings. Both lowercase calls take `Locale.ROOT`, pinned by
-a test that runs under a Turkish default locale. The three duplicate tests in
+carries the two role strings. Both lowercase calls name `Locale.ROOT`, pinned by
+a test that runs under a Turkish default locale.
+
+**Correction, later the same day.** I described the two copies' differing
+lowercase spellings as a latent default-locale bug. That was wrong: Kotlin's
+no-argument `lowercase()` already uses `Locale.ROOT` — it is what replaced
+`toLowerCase()`, which did use the device locale. The spellings were always
+equivalent, naming the locale is documentation rather than a fix, and the test
+guards a stdlib guarantee rather than one this code adds. The duplication was
+real; that one detail of the diagnosis was not.
+
+The three duplicate tests in
 `TalkModeTest` went away with the copy they asserted against.
 
 ---
