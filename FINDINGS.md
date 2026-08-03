@@ -33,6 +33,21 @@ into a file — is the finding that matters most here.**
 
 ## OPEN
 
+### F-13 — The main tab bar is text-only where iOS shows icon + label
+**Integration · Minor · known at the time of writing**
+
+`MainShell`'s `NavigationBar` renders each tab's title as the *icon* slot with
+no label, so the bar reads as two text pills. iOS uses
+`Label("Home", systemImage: "house.fill")` and
+`Label("Settings", systemImage: "gearshape")` — an icon above a label.
+
+Not a discovery; I wrote it that way to get the shell standing and did not want
+it to pass unrecorded, because it looks deliberate on screen. The two glyphs
+need drawing the way `PatientGlyphs.kt` draws `house.fill`, and one of them
+already exists there.
+
+---
+
 ### F-3 — Scene luma is measured on a different scale than iOS
 **Phase 6 · Important · CONFIRMED 2026-08-02 · needs a device to fix correctly**
 

@@ -27,7 +27,10 @@ import com.memoria.caregiver.ui.auth.AuthViewModel
 import com.memoria.caregiver.ui.components.NemaraButton
 import com.memoria.caregiver.ui.components.NemaraButtonVariant
 import com.memoria.caregiver.ui.components.NemaraEyebrow
+import com.memoria.caregiver.ui.home.RosterViewModel
 import com.memoria.caregiver.ui.nav.AuthNavHost
+import com.memoria.caregiver.ui.nav.MainShell
+import com.memoria.caregiver.ui.settings.AppSettingsViewModel
 import com.memoria.caregiver.ui.theme.Ink
 import com.memoria.caregiver.ui.theme.MemoriaTheme
 import com.memoria.caregiver.ui.theme.NemaraType
@@ -68,10 +71,19 @@ class MainActivity : ComponentActivity() {
         // activity instance, and holding an activity would leak it across a
         // configuration change.
         val env = AppEnvironment(scope = appScope, appContext = applicationContext)
+        val owner = this as ViewModelStoreOwner
         val authViewModel = ViewModelProvider(
-            this as ViewModelStoreOwner,
+            owner,
             viewModelFactory { initializer { AuthViewModel(env.auth) } },
         )[AuthViewModel::class.java]
+        val rosterViewModel = ViewModelProvider(
+            owner,
+            viewModelFactory { initializer { RosterViewModel(env.api, env.auth) } },
+        )[RosterViewModel::class.java]
+        val settingsViewModel = ViewModelProvider(
+            owner,
+            viewModelFactory { initializer { AppSettingsViewModel(env.api, env.auth) } },
+        )[AppSettingsViewModel::class.java]
 
         setContent {
             // The real analytics transport lands in Phase 8. Until then the
@@ -86,7 +98,26 @@ class MainActivity : ComponentActivity() {
                         AuthNavHost(
                             viewModel = authViewModel,
                             modifier = Modifier.safeDrawingPadding(),
-                            signedInContent = { SignedInPlaceholder(authViewModel) },
+                            signedInContent = {
+                                MainShell(
+                                    rosterViewModel = rosterViewModel,
+                                    settingsViewModel = settingsViewModel,
+                                    deepLink = env.deepLink,
+                                    // The patient bundle lands next; until it
+                                    // does this is an explicit placeholder
+                                    // rather than a screen that half-works.
+                                    patientContent = { patientId ->
+                                        PatientPlaceholder(
+                                            patientId = patientId,
+                                            onHome = { env.deepLink.closePatient() },
+                                        )
+                                    },
+                                    onAddPatient = {},
+                                    onEditProfile = {},
+                                    onPrivacy = {},
+                                    onContactSupport = {},
+                                )
+                            },
                         )
                     }
                 }
@@ -96,28 +127,25 @@ class MainActivity : ComponentActivity() {
 }
 
 /**
- * Stands in for the signed-in app until the roster host is wired.
+ * Stands in for the patient bundle until its five tabs are wired.
  *
- * It shows the caregiver the backend actually returned, which is the point: it
- * proves sign-in reached `POST /v1/me` and decoded the response, rather than
- * just that Supabase accepted a password.
+ * Deliberately explicit about being unfinished. A blank screen here would be
+ * indistinguishable from a patient whose data failed to load, which is exactly
+ * the confusion FINDINGS.md F-10 is about.
  */
 @androidx.compose.runtime.Composable
-private fun SignedInPlaceholder(viewModel: AuthViewModel) {
-    val caregiver by viewModel.currentCaregiver.collectAsState()
-
+private fun PatientPlaceholder(patientId: String, onHome: () -> Unit) {
     Column(
         modifier = Modifier.fillMaxSize().padding(Spacing.xl),
         verticalArrangement = Arrangement.spacedBy(Spacing.md, Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        NemaraEyebrow("Signed in")
-        Text(text = caregiver?.displayName ?: "—", style = NemaraType.title1, color = Ink)
-        Text(text = caregiver?.email ?: "—", style = NemaraType.body, color = Ink)
+        NemaraEyebrow("Patient")
+        Text(text = patientId, style = NemaraType.body, color = Ink)
         NemaraButton(
-            title = "Sign out",
+            title = "Home",
             variant = NemaraButtonVariant.Secondary,
-            onClick = { viewModel.signOut() },
+            onClick = onHome,
         )
     }
 }

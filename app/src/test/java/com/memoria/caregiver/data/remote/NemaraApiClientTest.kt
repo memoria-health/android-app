@@ -557,34 +557,29 @@ class NemaraApiClientTest {
         client.bootstrap()
 
         assertEquals(setOf(p1, p2), client.camerasByPatient.keys)
+        assertEquals(setOf(p1, p2), client.detectorsByPatient.keys)
         assertEquals(listOf("e2"), client.eventsByPatient[p2]?.map { it.id })
-        // Detectors are deliberately not asserted here: they are dropped by the
-        // defect pinned in `loading two patients' detectors at once…` below, and
-        // this test is about waiting for the fan-out, not about that.
     }
 
     /**
-     * FAILING ON PURPOSE — a real defect in `loadDetectors`, not a broken test.
+     * Regression test for the fix in "concurrent detector loads dropped one
+     * patient's entire list".
      *
-     * `loadDetectors` is written as
+     * Every cache writer here reads the map and writes it back. That is only
+     * safe while nothing suspends in between, so the response has to be bound
+     * to a local BEFORE the map is touched. Written as one expression —
+     * `detectorsByPatient + (patientId to detectorsApi.loadDetectors(id))` —
+     * the map is read before the request suspends, and with two patients
+     * loading at once the later write erases the earlier one. Nothing throws:
+     * a caregiver with two patients just finds one Detectors tab empty after
+     * sign-in until something reloads it.
      *
-     *     detectorsByPatient = detectorsByPatient + (patientId to detectorsApi.loadDetectors(id))
-     *
-     * so the cached map is READ before the network call and written after it.
-     * Bootstrap, refresh and resync all load several patients at once, so while
-     * one patient's request is in flight another finishes and writes; the first
-     * then writes back the map it read before that, and the second patient's
-     * detectors are gone. Nothing throws, so a caregiver with two patients just
-     * finds one of the two Detectors tabs empty after sign-in until something
-     * reloads it.
-     *
-     * The other cache writers all bind the response to a local first
-     * (`val cams = …`, `val page = …`), which is what the Swift does here too:
-     * `let list = try await …` and only then `detectorsByPatient[pid] = list`.
-     * Fixing it is one line, but that is a main-source change, so it is left to
-     * the owner rather than made quietly from a test.
+     * Bootstrap, refresh and resync all load every patient at once, so this is
+     * the ordinary path on any account with more than one patient, not an edge
+     * case. Being single-threaded does not help — a suspension point between
+     * the read and the write is an interleaving point.
      */
-    @Test fun `loading two patients' detectors at once must not drop one of them`() = runTest {
+    @Test fun `loading two patients' detectors at once keeps both`() = runTest {
         val client = makeClient()
         serveDetectors(p1, Fx.detector("d1", patientId = p1))
         serveDetectors(p2, Fx.detector("d2", patientId = p2))
@@ -663,8 +658,9 @@ class NemaraApiClientTest {
 
         client.resync()
 
-        // The patient whose cameras failed still got their events, and the
-        // other patient was untouched by the failure.
+        // The patient whose cameras failed still got their detectors and
+        // events, and the other patient was untouched by the failure.
+        assertEquals(listOf("d1"), client.detectorsByPatient[p1]?.map { it.id })
         assertEquals(listOf("e1"), client.eventsByPatient[p1]?.map { it.id })
         assertEquals(listOf("c2"), client.camerasByPatient[p2]?.map { it.id })
         assertEquals(listOf("e2"), client.eventsByPatient[p2]?.map { it.id })
