@@ -733,31 +733,32 @@ patient live, patient events, patient sensors.
 
 ---
 
-### F-35 — "Add a sensor" is wired and does nothing on the device
-**Integration · Important · OPEN, cause not identified**
+### F-35 — RETRACTED: "Add a sensor" works; I tested the wrong binary
+**Integration · was Important · FALSE FINDING, retracted 2026-08-03**
 
-The F-32 work reported eleven of twelve callbacks as live. **At least one is not**,
-and it was found the first time I tapped it on the emulator.
+I reported that `onAddSensor` was wired at every layer and did nothing on the
+device, with uiautomator bounds, tap coordinates and a clean logcat as evidence.
+**The evidence was real and the conclusion was wrong.**
 
-Evidence, gathered rather than assumed:
-- `CameraListScreen.kt:90` — `onClick = onAddSensor`.
-- `MainActivity.kt:517` — `onAddSensor = { destination = PatientDestination.AddSensor }`.
-- `MainActivity.kt:591` — `PatientDestination.AddSensor -> ModalOverlay { AddCameraHost(…) }`.
-- `uiautomator` reports a clickable node at `[42,567][1038,693]`; the tap was at
-  `(540, 630)`, inside it.
-- After the tap the view hierarchy is **unchanged** — same twelve text nodes — and
-  logcat shows no exception, fatal or otherwise.
+A concurrent agent had installed its own APK over mine. It was building in an
+isolated tree — `HEAD` plus only its own changes — precisely to avoid another
+agent's broken compile, and said so in its report. That build did not contain the
+F-32 wiring, so `onAddSensor` genuinely was `{}` **in the binary I tested**. The
+control was clickable because the screen predates the wiring.
 
-So the control is clickable, the tap lands inside it, the callback chain reads
-correctly, and no state change reaches the screen. I did not find the cause and
-am not guessing at one.
+Rebuilt from the current tree and re-tested: the sheet opens with its Phone and
+Memoria Sensor tabs, room field, icon picker and Generate code.
 
-**The lesson is bigger than the bug.** The agent's report was detailed, specific
-and confident — 36 mutations, all killed, 1917 tests green — and the first thing
-I tapped did not work. **A green suite plus a thorough write-up is not evidence
-that a screen is reachable.** Everything F-32 claims to have wired must be walked
-on a device before any of it is believed; only Sensors has been walked so far,
-and it failed.
+**The harness lesson, which is the reason to keep this entry rather than delete
+it:** device verification is only valid against a binary you built *and* installed
+with no agent running that might install its own. Everything else in this port
+can tolerate concurrency; `adb install` cannot, because there is exactly one
+device and the last writer wins silently. **Print the APK's build timestamp and
+compare it to the commit under test before believing any device result** — I had
+the timestamp in front of me (`02:48` vs a test at `02:47`) and did not check it.
+
+What I got right: I recorded the finding with the raw evidence rather than a
+conclusion, which is what made the retraction cheap and unambiguous.
 
 ---
 

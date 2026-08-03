@@ -276,6 +276,34 @@ to be yours — check `compileDebugUnitTestKotlin` before believing any verdict.
 
 ---
 
+## 4e. Device verification is invalid while any agent is running
+
+Added 2026-08-03, after I reported a working control as broken (FINDINGS.md
+F-35, retracted).
+
+There is **one** emulator. `adb install` has no locking and the last writer wins
+silently. An agent building in an isolated tree — which is the correct thing for
+it to do while another agent's compile is broken — will install a binary that
+does **not** contain the change you are testing, and your tap will exercise the
+old code path with no error anywhere.
+
+**The rule:** before believing any device result, print the APK timestamp and
+check it against the change under test.
+
+```bash
+ls -la ~/.gradle-builds/memoria-caregiver-android/app/outputs/apk/debug/app-debug.apk
+```
+
+If an agent is running, either wait for it or accept that the result is
+provisional. I had that timestamp on screen — `02:48` against a test run at
+`02:47` — and did not read it.
+
+This is the same shape as §4d: **a gate that reports on something other than
+what it claims to be measuring.** There the mutation harness measured a run that
+never happened; here the device measured a binary that was not the one built.
+
+---
+
 ## 5. Escalation — exactly what stops the machine
 
 Aryaman's standing instruction is to surface design choices before implementing.
