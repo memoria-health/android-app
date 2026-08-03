@@ -61,7 +61,7 @@ Legend — **Blocks:** what cannot be completed. **Needs:** the requirement itse
 |---|---|---|---|---|
 | REQ-19 | CI | A runner, plus prefetched Robolectric `android-all` jars — a cold runner otherwise fails in a way that looks like a real test failure (`DECISIONS.md` D-009) | Nothing today; every gate is local | later |
 | REQ-20 | Off-machine backup | A remote. Currently commit-only, no push (`DECISIONS.md` D-007), in a cloud-synced tree already shown to corrupt builds (D-011) | Nothing, but the work exists in exactly one place | now-ish |
-| REQ-22 | Avatar photo renderer | An app-root provider for `LocalAvatarPhoto` (DIFFERENCES.md D8), i.e. an image-loading library wired in once. Until then every avatar shows its serif initial and no patient photo renders. | Patient photos on every screen that shows an avatar | 3 |
+| REQ-22 | Avatar photo renderer | **WIRED 2026-08-02** — Coil provided at the app root for `LocalAvatarPhoto` (DIFFERENCES.md D8). Server side proven: upload → `photo_storage_key` → signed URL fetches 200 from the host. **Client side unproven**: the signed URL uses the host LAN IP, which the emulator cannot reach (FINDINGS.md F-21). Needs a physical device, or a decision on a debug-only host rewrite. | Confirming photos actually render | 3 |
 | REQ-21 | Instrumented test wiring | `androidTest` source set + runner + `connectedDebugAndroidTest` | Tier 3 of the ladder | 3 |
 
 ---

@@ -147,6 +147,11 @@ dependencies {
     // ProcessLifecycleOwner: the foreground/background signal MemoriaApplication
     // needs to stop the 1s camera poll when the app is backgrounded.
     implementation(libs.androidx.lifecycle.process)
+    // Avatar photos (REQ-22). Declared at the APP layer, deliberately not in the
+    // design system: DIFFERENCES.md D8 injects the renderer through
+    // LocalAvatarPhoto precisely so ui/components/ needs no image dependency.
+    implementation(libs.coil.compose)
+    implementation(libs.coil.network.okhttp)
     implementation(libs.kotlinx.coroutines.android)
 
     // Networking + serialization (Phase 2)

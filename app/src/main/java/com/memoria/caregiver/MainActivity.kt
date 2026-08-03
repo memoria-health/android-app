@@ -22,7 +22,10 @@ import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.memoria.caregiver.analytics.LocalAnalytics
+import coil3.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
 import com.memoria.caregiver.analytics.NoOpAnalytics
+import com.memoria.caregiver.ui.components.LocalAvatarPhoto
 import com.memoria.caregiver.ui.auth.AuthViewModel
 import com.memoria.caregiver.ui.components.NemaraButton
 import com.memoria.caregiver.ui.components.NemaraButtonVariant
@@ -120,7 +123,27 @@ class MainActivity : ComponentActivity() {
             // The real analytics transport lands in Phase 8. Until then the
             // no-op sink keeps every component's internal logging call valid
             // without inventing a half-built pipeline.
-            CompositionLocalProvider(LocalAnalytics provides NoOpAnalytics) {
+            CompositionLocalProvider(
+                LocalAnalytics provides NoOpAnalytics,
+                // REQ-22 / DIFFERENCES.md D8. The design system deliberately owns
+                // no image dependency, so the one renderer is provided here, once,
+                // and every avatar in the app picks it up. Until this existed,
+                // every avatar showed its serif initial and no patient photo
+                // rendered anywhere.
+                LocalAvatarPhoto provides { url ->
+                    AsyncImage(
+                        model = url,
+                        // Null rather than a description: the avatar's own
+                        // semantics already name the patient, and "photo of
+                        // Margaret Doyle" announced twice is worse than once.
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        // iOS's .scaledToFill() — fill the circle and crop, never
+                        // letterbox a face.
+                        contentScale = ContentScale.Crop,
+                    )
+                },
+            ) {
                 MemoriaTheme {
                     // Paper, not the Material `surface` role. Surface defaults to
                     // colorScheme.surface, which is Card — the RAISED card token.

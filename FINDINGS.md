@@ -316,6 +316,40 @@ nudged until it disappears.
 
 ---
 
+### F-21 — Storage URLs cannot serve the emulator and a real device from one value
+**Environment · Important · OPEN, not an app defect**
+
+REQ-22 is wired: `LocalAvatarPhoto` now has a provider (Coil, declared at the app
+layer so the design system still owns no image dependency, per D8). Verified
+server-side end to end — a photo uploads, `photo_storage_key` is set, and
+`GET /photo-url` returns a signed URL that fetches **200 from the host**.
+
+It still does not render on the emulator, and the reason is the environment, not
+the code:
+
+- The app reaches the backend at **`10.0.2.2:8002`** — the emulator's alias for
+  the host. That works.
+- The backend builds signed storage URLs from `NEMARA_SUPABASE_URL`, which must
+  be the host's **LAN IP** (`10.0.0.248`) so that a *real* device can fetch them.
+  It is split-horizon: the container calls Supabase with it AND hands it to
+  clients.
+- `10.0.2.2` is meaningful only inside the emulator; the LAN IP is meaningful
+  only outside it. **One value cannot satisfy both.**
+
+The avatar degrades to its serif initial, which is the `.failure` branch of
+iOS's `AsyncImage` — so the behaviour is right even though the image is absent.
+
+**Not hacked around.** A debug-only rewrite of the storage host to `10.0.2.2`
+would make the emulator work and is defensible, but it is a real design decision
+about dev configuration, so it is Aryaman's call rather than mine. The
+alternative is to verify photos on a physical device, alongside REQ-1/REQ-2
+which need one anyway.
+
+Until then: **no avatar photo can be confirmed rendering on the emulator**, and
+REQ-22 should be read as "wired, server side proven, client side unproven".
+
+---
+
 ### F-3 — Scene luma is measured on a different scale than iOS
 **Phase 6 · Important · CONFIRMED 2026-08-02 · needs a device to fix correctly**
 
