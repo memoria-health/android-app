@@ -303,4 +303,37 @@ persistence of a credential would not have been.
 
 ---
 
+## D-016 — Push is FCM, and push is not the delivery guarantee
+**Date:** 2026-08-03 · **Decided by:** Aryaman · **Reversal cost:** low now, medium once tokens are registered
+
+**Decided:** Firebase Cloud Messaging. On devices with Google Play Services it is
+the only mechanism that wakes an app that is not running, and the alternatives
+(a foreground service holding a socket, or per-vendor SDKs) are worse for a
+first Android release.
+
+**Samsung is not a concern** — it ships Play Services everywhere it sells, and
+third-party apps use FCM normally there.
+
+**Two risks recorded so they are not discovered during the pilot:**
+
+1. **OEM battery killers.** Xiaomi/MIUI, Vivo, Oppo and Realme aggressively kill
+   background apps and can delay or drop FCM delivery until a user whitelists
+   the app. These are exactly the brands that matter in India. This is an
+   Android OEM problem, not a Firebase one — no push mechanism escapes it.
+2. **Devices without Google Play Services** (Huawei since 2019, Chinese-market
+   ROMs) cannot receive FCM at all. If any pilot family has one, that family gets
+   no alerts and the code's single-token-namespace assumption is wrong.
+
+**The product consequence, flagged and not decided here:** for a fall alert,
+"delivered eventually" equals not delivered. Email alerts are already built and
+are an independent channel no OEM can kill. Whether a fall escalates to email or
+SMS when push is not acknowledged is a product decision, not a port decision.
+
+**Deferred, not blocked:** the client half — notification channel, service, tap
+payload parsing, deep link into the event — can be built now. It needs
+`google-services.json` (REQ-7) only to receive an actual message, and the
+backend's `/v1/me/devices` shape (Q1/REQ-8) only for registration.
+
+---
+
 _(Append as decisions are made. Never delete; mark REVERSED with the date.)_

@@ -11,6 +11,11 @@ Never delete an entry. Mark it resolved with the answer and the date.
 ## OPEN
 
 ### Q1 — FCM device registration contract
+**SDK settled 2026-08-03 (Aryaman): Firebase Cloud Messaging.** See DECISIONS.md
+D-016, which also records the two risks that come with it (OEM battery killers in
+exactly the brands that matter in India, and no-GMS devices getting nothing).
+**Still open:** the backend's `/v1/me/devices` shape — `platform` discriminator
+vs a sibling route. Registration alone is blocked; everything else can be built.
 **Raised:** 2026-08-01, Phase 0
 **Status: NOT A BLOCKER** (Aryaman 2026-08-01). FCM is assumed solvable and does
 not have to mirror APNs. Scoped as separate backend work; the Android client
