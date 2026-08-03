@@ -48,6 +48,38 @@ already exists there.
 
 ---
 
+### F-14 — Four screen-level ports are missing entirely, not merely unwired
+**All phases · Important · found 2026-08-02 by a completeness sweep**
+
+`PHeader` turned out to have never been ported — I only noticed because the
+patient shell could not be built without it. That prompted a name-based sweep of
+all 61 iOS view files against the Android tree, and it found more of the same
+shape. These are **absent**, not built-and-unreachable, which is a different
+problem from F-10:
+
+| iOS file | Lines | Android | Note |
+|---|---|---|---|
+| `PHeader.swift` | 76 | **FIXED 2026-08-02** | now `ui/patient/PatientHeader.kt` |
+| `PatientDetectorsView.swift` | 156 | **missing** | the Detectors tab's own list. `DetectorRow` and `DetectorDetailSheet` exist; nothing composes them |
+| `EventReviewView.swift` | — | **missing** | review step 2. `EventsListViewModel.submitReview` is written and tested and has no caller |
+| `SupportContactView.swift` | — | **missing** | `SupportUiState` exists, the screen does not |
+| `PrivacyPolicyView.swift` | — | **missing** | no match anywhere |
+
+**Why the phase reviews could not catch this.** Every review checked that what
+was built matched the Swift. None checked the inverse — that everything in the
+Swift got built — because each phase's scope was itself defined by a list I
+wrote. A file I omitted from the list was invisible to every gate afterwards,
+including the test suite, which can only test code that exists.
+
+`SensorSetupWizard` and `TutorialOverlay` are also absent but are *known* absent
+(Q5 and the plan's deferred list), which is the difference that matters.
+
+**The remedy is not to port these four now.** It is that the parity gate has to
+include a checklist derived from the iOS file list rather than from mine.
+`PARITY.md` §29 lists behaviours; nothing lists *files*.
+
+---
+
 ### F-3 — Scene luma is measured on a different scale than iOS
 **Phase 6 · Important · CONFIRMED 2026-08-02 · needs a device to fix correctly**
 

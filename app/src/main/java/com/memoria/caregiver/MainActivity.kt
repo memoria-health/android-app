@@ -31,6 +31,8 @@ import com.memoria.caregiver.ui.home.RosterViewModel
 import com.memoria.caregiver.ui.nav.AuthNavHost
 import com.memoria.caregiver.ui.events.EventsListViewModel
 import com.memoria.caregiver.ui.nav.MainShell
+import com.memoria.caregiver.ui.cameras.CameraListScreen
+import com.memoria.caregiver.ui.cameras.CameraListViewModel
 import com.memoria.caregiver.ui.patient.PatientShell
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -167,6 +169,11 @@ private fun PatientRoute(
 
     val openEvent by eventsViewModel.openEvent.collectAsState()
 
+    val camerasViewModel: CameraListViewModel = viewModel(
+        key = "cameras:$patientId",
+        factory = viewModelFactory { initializer { CameraListViewModel(env.api, patientId) } },
+    )
+
     PatientShell(
         patient = patient,
         resolvePhotoUrl = resolvePhotoUrl,
@@ -186,7 +193,21 @@ private fun PatientRoute(
         // client lands, the disconnect goes here and nowhere else.
         onLeavePatient = { /* TODO(live-tab): env.liveKit.disconnect() */ },
         liveContent = { TabStub("Live") },
-        camerasContent = { TabStub("Sensors") },
+        camerasContent = {
+            val cameraState by camerasViewModel.state.collectAsState()
+            CameraListScreen(
+                state = cameraState,
+                // Camera detail and the add-sensor wizard are the next slice.
+                // SensorSetupWizard step 2 is separately blocked on QUESTIONS.md
+                // Q5 — Android has no equivalent of the captive portal iOS
+                // relies on, so that interaction has to be designed, not ported.
+                onSelectCamera = {},
+                onAddSensor = {},
+            )
+        },
+        // No PatientDetectorsScreen exists — it was never ported (FINDINGS.md
+        // F-14). DetectorRow and DetectorDetailSheet are built; nothing composes
+        // them into the tab's list.
         detectorsContent = { TabStub("Detectors") },
         settingsContent = { TabStub("Settings") },
     )
