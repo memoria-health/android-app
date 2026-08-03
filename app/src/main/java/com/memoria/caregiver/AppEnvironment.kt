@@ -1,11 +1,17 @@
 package com.memoria.caregiver
 
+import android.content.Context
 import com.memoria.caregiver.data.AppConfig
 import com.memoria.caregiver.data.auth.SupabaseAuthService
 import com.memoria.caregiver.data.remote.ApiError
 import com.memoria.caregiver.data.remote.HttpTransport
 import com.memoria.caregiver.data.remote.NemaraApiClient
 import com.memoria.caregiver.data.remote.NemaraJson
+import com.memoria.caregiver.data.realtime.CameraLiveState
+import com.memoria.caregiver.data.realtime.InMemoryEverOnlineStore
+import com.memoria.caregiver.data.realtime.RealtimeStore
+import com.memoria.caregiver.data.realtime.SharedPrefsEverOnlineStore
+import com.memoria.caregiver.ui.nav.DeepLinkRouter
 import io.github.jan.supabase.auth.Auth
 import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.realtime.Realtime
@@ -27,6 +33,13 @@ import kotlinx.coroutines.CoroutineScope
  */
 class AppEnvironment(
     scope: CoroutineScope,
+    /**
+     * Application context, used for exactly one thing: the SharedPreferences
+     * behind [CameraLiveState]'s "has this camera ever been online" set. That
+     * set is persisted on iOS too (`UserDefaults`), and it is what keeps an
+     * offline camera from regressing to "Preparing…" after a relaunch.
+     */
+    appContext: Context? = null,
 ) {
 
     init {
@@ -64,6 +77,19 @@ class AppEnvironment(
 
     val auth = SupabaseAuthService(client = supabase, scope = scope)
 
+    /**
+     * Shared between the API client and the Realtime store, because the three
+     * writers of the reconnect window live in both (PARITY.md §10). One
+     * instance, or the Live tile's "Connecting…" state depends on which half
+     * of the app last touched it.
+     */
+    val live = CameraLiveState(
+        store = appContext
+            ?.getSharedPreferences(EVER_ONLINE_PREFS, Context.MODE_PRIVATE)
+            ?.let { SharedPrefsEverOnlineStore(it) }
+            ?: InMemoryEverOnlineStore(),
+    )
+
     val api = NemaraApiClient(
         HttpTransport(
             client = httpClient,
@@ -72,9 +98,36 @@ class AppEnvironment(
             // underneath us and a held token would go stale.
             tokenProvider = { auth.currentAccessToken() },
         ),
+        live = live,
+    )
+
+    /**
+     * Routing target for "which patient is open". Every way into a patient —
+     * a roster tap, a settings row, a notification — writes here and nothing
+     * else opens one, which is the rule iOS adopted after two presenters
+     * fought over one full-screen cover.
+     */
+    val deepLink = DeepLinkRouter()
+
+    /**
+     * The four Realtime channels and the 1-second poll.
+     *
+     * It takes [api] twice, as its cache and as its camera fetcher, and [api]
+     * holds it back — a cycle that exists only because iOS puts both halves in
+     * one type and has nothing to break. Constructed after [api] and handed
+     * back to it below.
+     */
+    val realtime = RealtimeStore(
+        supabase = supabase,
+        cache = api,
+        fetcher = api,
+        live = live,
+        scope = scope,
     )
 
     init {
+        api.realtime = realtime
+
         // Sign-up passes a display name and provisions the row; sign-in and
         // restore fetch the existing one. Both then bootstrap. This is the only
         // place the two services meet.
@@ -91,9 +144,11 @@ class AppEnvironment(
             } else {
                 api.me()
             }
-            // TODO(phase-3): api.bootstrap() — the initial roster load. There is
-            // nothing to load until the roster exists, and calling a stub here
-            // would make sign-in look complete when it is not.
+            // Roster, then cameras/detectors/events for every patient, then
+            // Realtime detached and the poll started. Sign-in is not complete
+            // until this returns, because landing on an empty roster that fills
+            // in a second later reads as "my patients are gone".
+            api.bootstrap()
             caregiver
         }
 
@@ -105,8 +160,13 @@ class AppEnvironment(
         }
 
         auth.onSignedOut = {
-            // TODO(phase-3): api.teardown() — clear the cached roster and close
-            // Realtime channels. Nothing is cached yet.
+            // Stops the poll, closes the channels and empties all four cached
+            // collections. The clear is a privacy boundary, not housekeeping:
+            // a care team sharing one device is the normal case, and without it
+            // the next person to sign in is one recomposition away from seeing
+            // a household they have no relationship to.
+            api.teardown()
+            deepLink.closePatient()
         }
 
         auth.onDeleteAccount = { api.deleteAccount() }
@@ -115,5 +175,13 @@ class AppEnvironment(
     /** Releases the HTTP client. Process-lifetime object, so this is for tests. */
     fun close() {
         httpClient.close()
+    }
+
+    private companion object {
+        /**
+         * iOS stores the same set under `co.sunny.nemara.camerasEverOnline`.
+         * The file name is Android-only; the key inside matches.
+         */
+        const val EVER_ONLINE_PREFS = "com.memoria.caregiver.live"
     }
 }

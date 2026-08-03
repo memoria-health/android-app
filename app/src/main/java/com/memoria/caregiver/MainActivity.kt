@@ -64,7 +64,10 @@ class MainActivity : ComponentActivity() {
         )
         super.onCreate(savedInstanceState)
 
-        val env = AppEnvironment(scope = appScope)
+        // applicationContext, not `this`: the environment outlives every
+        // activity instance, and holding an activity would leak it across a
+        // configuration change.
+        val env = AppEnvironment(scope = appScope, appContext = applicationContext)
         val authViewModel = ViewModelProvider(
             this as ViewModelStoreOwner,
             viewModelFactory { initializer { AuthViewModel(env.auth) } },
