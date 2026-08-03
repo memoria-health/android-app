@@ -164,8 +164,15 @@ sees for the same server response.
 
 ---
 
-## H-9 — The terms gate ships bricked: there are no PDFs
-**Phase 2 · FIXED 2026-08-02**
+## H-9 — The terms gate ships bricked
+**Phase 2 · REOPENED 2026-08-02** — the PDFs are vendored and byte-identical,
+but `PdfPageLoader` has **zero production callers**, so `TermsGateScreen`'s
+`pageSource` default `{ emptyList() }` fires and `canAccept` can still never
+become true. Bricked again, by a different cause. The gate is also unreachable
+(FINDINGS.md F-27), so the ToS and privacy consent that ships enforced on
+backend, web and iOS has no Android enforcement path at all.
+
+**The 2026-08-02 fix, which stands as far as it goes:**
 
 Fixed: the two placeholder PDFs iOS ships are vendored to
 `app/src/main/assets/legal/`, and `PdfPageLoader` rasterises them with

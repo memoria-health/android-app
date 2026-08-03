@@ -3,6 +3,7 @@ package com.memoria.caregiver
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Arrangement
@@ -47,7 +48,7 @@ import com.memoria.caregiver.ui.cameras.CameraListViewModel
 import com.memoria.caregiver.ui.detectors.PatientDetectorsScreen
 import com.memoria.caregiver.ui.detectors.PatientDetectorsViewModel
 import com.memoria.caregiver.ui.patient.PatientShell
-import com.memoria.caregiver.ui.patient.PatientViewModelScope
+import com.memoria.caregiver.ui.nav.ScopedViewModelStore
 import androidx.compose.material3.ModalBottomSheet
 import com.memoria.caregiver.ui.settings.DataCollectionConsentSheet
 import com.memoria.caregiver.ui.settings.patientDisplayName
@@ -174,7 +175,17 @@ class MainActivity : ComponentActivity() {
                                     onPrivacy = {},
                                     onContactSupport = { showSupport = true },
                                 )
-                                if (showSupport) {
+                                if (showSupport) ScopedViewModelStore("support") {
+                                    // Scoped, so closing the sheet CLEARS the
+                                    // ViewModel. Activity-scoped, its `dismissed`
+                                    // flag was never reset, so the second tap on
+                                    // "Contact support" re-entered with
+                                    // dismissed = true and the sheet closed in
+                                    // the same frame — the row did nothing on
+                                    // every tap after the first, for the life of
+                                    // the process. It also kept the previous
+                                    // caregiver's typed message across sign-out.
+                                    // FINDINGS.md F-24.
                                     val supportViewModel: SupportContactViewModel = viewModel(
                                         factory = viewModelFactory {
                                             initializer { SupportContactViewModel(env.api) }
@@ -187,6 +198,11 @@ class MainActivity : ComponentActivity() {
                                     LaunchedEffect(supportState.dismissed) {
                                         if (supportState.dismissed) showSupport = false
                                     }
+                                    // Android's universal exit. Without it Back
+                                    // — and the edge swipe, which is how most
+                                    // people close a screen — fell through to
+                                    // the Activity and QUIT THE APP mid-message.
+                                    BackHandler { supportViewModel.cancel() }
                                     SupportContactScreen(
                                         state = supportState,
                                         onSubjectChange = supportViewModel::onSubjectChange,
@@ -230,7 +246,7 @@ private fun PatientRoute(
         return
     }
 
-    PatientViewModelScope(patientId) {
+    ScopedViewModelStore("patient:" + patientId) {
         PatientTabs(env, patient, patientId, resolvePhotoUrl, onHome, onContactSupport)
     }
 }
@@ -404,6 +420,9 @@ private fun PatientTabs(
 
         if (reviewing) {
             var review by remember(event.id) { mutableStateOf(EventReviewState(event)) }
+            // Back returns to the detail, not out of the app. Typed notes
+            // survive it, and survive a configuration change.
+            BackHandler { reviewing = false }
             EventReviewScreen(
                 state = review,
                 onChoiceChange = { review = review.copy(choice = it) },
@@ -417,12 +436,19 @@ private fun PatientTabs(
             )
         } else {
             val detailViewModel: EventDetailViewModel = viewModel(
-                key = "eventDetail:${'$'}{event.id}",
+                // Concatenated, not interpolated. This was written as
+                // "eventDetail:${'$'}{event.id}" — a literal dollar followed by
+                // literal text, so the key was a CONSTANT and every event after
+                // the first got the first event's ViewModel: the caregiver read
+                // one event's narrative and clip while filing a review against
+                // another. FINDINGS.md F-23.
+                key = "eventDetail:" + event.id,
                 factory = viewModelFactory {
                     initializer { EventDetailViewModel(env.api, patientId, event) }
                 },
             )
             val detailState by detailViewModel.state.collectAsState()
+            BackHandler { eventsViewModel.closeEvent() }
             EventDetailScreen(
                 state = detailState,
                 onBack = eventsViewModel::closeEvent,

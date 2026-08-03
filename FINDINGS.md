@@ -389,6 +389,196 @@ rather than a one-off, and would serve the Android port equally.
 
 ---
 
+### F-23 — Every event detail after the first rendered the PREVIOUS event
+**Integration · Critical · FIXED 2026-08-02, verified**
+
+```kotlin
+key = "eventDetail:${'$'}{event.id}",   // WRONG
+```
+
+`${'$'}` is Kotlin's escape for a literal dollar; `{event.id}` after it is plain
+text. The key was the **constant string** `eventDetail:${event.id}` for every
+event, so `viewModel(key = …)` returned the first instance ever created — built
+capturing event A.
+
+**What a caregiver saw:** open "Possible fall", back out, tap "Took meds" — the
+detail still showed the fall's title, time, narrative and *the fall's clip*.
+Then "Review this event" opened the review built from `openEvent`, which is the
+**correct** event B. **They read one event and filed a review against another.**
+
+Mine, and instructive: I wrote this file through a shell heredoc and escaped the
+`$` to stop the shell interpolating it. The escape leaked into the Kotlin. The
+three sibling keys three lines above interpolate correctly, which is what made
+it invisible on a read. Fixed by concatenating rather than interpolating.
+
+---
+
+### F-24 — "Contact support" worked exactly once per app process
+**Integration · Critical · FIXED 2026-08-02, verified on device**
+
+`SupportContactViewModel` was obtained with an unkeyed `viewModel()` outside any
+`NavHost`, so its owner was the Activity and it outlived the sheet. `cancel()`
+sets `dismissed = true` and nothing ever set it back. The second tap re-entered
+with `dismissed` already true, the `LaunchedEffect` fired on first composition,
+and the sheet closed in the same frame.
+
+**What a caregiver saw:** the Settings row does nothing, silently, on every tap
+after the first, until the app is killed. It also kept the previous caregiver's
+typed subject and message resident across sign-out.
+
+Fixed by giving the sheet its own `ViewModelStore` (the helper built for the
+patient bundle, now `ui/nav/ScopedViewModelStore.kt`), so closing clears it.
+Verified by opening the sheet, backing out, and opening it again.
+
+---
+
+### F-25 — Nothing handled the system Back button in the signed-in app
+**Integration · Critical · FIXED 2026-08-02, verified on device**
+
+`grep -rn "BackHandler|onBackPressed" app/src/main` returned **zero hits**. The
+signed-out flow was fine because Navigation Compose installs its own; everything
+signed-in is a conditional branch rather than a route — the patient bundle,
+event detail, event review, the support sheet. In all four, Back **and the
+gesture-nav edge swipe, which is how most Android users close a screen** fell
+through to the Activity and quit the app.
+
+**What a caregiver saw:** mid-way through typing review notes on a fall, an
+instinctive edge swipe closed the app and lost the notes.
+
+iOS has no equivalent gesture, so nothing in the port suggested it was needed —
+the same "behaviour iOS gets free from the platform" shape as every Critical in
+the previous review, running the other way. Handlers added at all four levels.
+
+---
+
+### F-26 — Phase 7's push stack does not exist, and `nemara://` is dead
+**Phases 7 and 2 · Critical · OPEN**
+
+Two separate holes, both verified absent across the whole tree.
+
+**Push.** No `firebase-messaging` or `google-services` dependency, no
+`FirebaseMessagingService`, no `google-services.json`, no `POST_NOTIFICATIONS`,
+no `<service>`, no notification channel. The *consumer* half is fully built and
+green with **zero production callers**: `DeepLinkRouter.bufferEventTap` /
+`drainPendingTap`, `registerDeviceToken` / `deleteDeviceToken`, and
+`focusEventId` — which is read in three places and **written in none**. So the
+tab steering, the focus consumption and the router's whole durable-target design
+are unreachable. `MainShell` also never calls `drainPendingTap()` the way
+`MainTabView.onAppear` does.
+
+`QUESTIONS.md` Q1 blocks only the registration *call*, and `REQUIREMENTS.md`
+REQ-8 says retrieval and display are unblocked — so per `HARNESS.md` §4c this is
+missing, not deferred. **The fall alert never arrives; the app is a viewer you
+must remember to open.**
+
+**Deep links.** `MainActivity` has only a MAIN/LAUNCHER intent filter — no
+`VIEW`/`BROWSABLE`/`scheme="nemara"`, no `onNewIntent`, no `intent.data` read.
+`AuthNavHost` has no `RESET_PASSWORD` destination and `AuthViewModel` has no
+reset methods, though `exchangeRecoveryCode` and `updatePassword` both exist and
+are tested and `ResetPasswordScreen` is 292 lines with no producer.
+**Password recovery is impossible on Android**: the email sends, the link opens
+nothing.
+
+---
+
+### F-27 — Account creation is a loop, so no Android account can be made
+**Phase 2 · Critical · OPEN**
+
+`AuthNavHost`'s `SIGN_UP` route renders `WelcomeScreen` again, whose `onSignUp`
+pops back. Welcome → "Create an account" → an identical Welcome. The
+`TODO(phase-2)` is now three phases stale.
+
+Four things must land together and none is wired: `SignUpScreen` (586 lines) and
+`TermsGateScreen` (430 lines) are built, tested and unreachable;
+`LegalConstants.currentTosVersion` has no Android home at all; and
+`PdfPageLoader` has **zero production callers**, so `TermsGateScreen`'s
+`pageSource` default `{ emptyList() }` fires and the gate can never be satisfied
+— even though H-9 records the PDFs as vendored and they are present in
+`assets/legal/`. **H-9 must be reopened: the gate is bricked again, by a
+different cause.**
+
+Consequence beyond the loop: the ToS and privacy consent gate that ships
+enforced on backend, web and iOS **has no Android enforcement path at all.**
+
+---
+
+### F-28 — Analytics is discarded, and the coverage gate has the hole it was built to close
+**Phase 8 · Important · OPEN**
+
+`MainActivity` provides `NoOpAnalytics`. There is no counterpart to
+`Services/Analytics.swift` (295 lines: buffering, disk persistence, hourly
+flush, batch insert, caregiver-id stamping, an enabled kill switch). **All 16
+production call sites reach the bin**, and `logLifecycle` has zero callers where
+iOS logs `app_launch` / `app_foreground` / `app_background`.
+
+**Why the coverage gate missed it, which matters more than the finding:**
+`HARNESS.md` §4c globs only `NemaraCaregiver/Features` and `NemaraCaregiver/App`.
+`Services/`, `Models/`, `Networking/` and `DesignSystem/` are **never swept** —
+exactly where `Analytics.swift`, `AnalyticsView.swift` and `WanderingDoorCache`
+live. The gate written to catch missing files has the same blind spot that
+produced them.
+
+---
+
+### F-29 — The events feed poll is not lifecycle-gated
+**Phase 3 · Important · OPEN**
+
+`PatientShell` launches `runFeedPoll()` from a `LaunchedEffect`; neither it nor
+`viewModelScope` is cancelled when the process backgrounds. F-15 C-2 fixed
+precisely this for the *camera* poll and nothing was done for this one. A
+caregiver who leaves the app parked on Events keeps issuing
+`GET /v1/patients/{id}/events` every 20 seconds, indefinitely, backgrounded, on
+cellular. The fix has an obvious home in the `ProcessLifecycleOwner` observer
+that already exists.
+
+---
+
+### F-30 — Three support and feedback entry points are built and unreachable
+**Phase 8 · Important · PARTLY FIXED 2026-08-02**
+
+`SupportButton` is now applied on both shells (F-22). Still unreachable:
+`HelpChatSheet` (`HelpChatState` has no producer), `FeedbackScreen` (992 lines),
+`rememberFeedbackScreenshotPicker`, `compressFeedbackJpeg` and
+`EnrollmentApi.submitFeedback` — all zero callers. The patient header's Feedback
+pill is wired to `onFeedback = {}`, so it renders on every patient tab and does
+nothing. **Founders receive nothing from Android.**
+
+---
+
+### F-31 — Accessibility and touch targets, at scale
+**All phases · Important · OPEN**
+
+80 `clickable` call sites in `ui/`; 15 declare a `contentDescription`; exactly
+**one** declares a `role` — the `Role.Switch` from the F-18 fix. Every tappable
+label iOS builds as a `Button` announces to TalkBack as unlabelled clickable
+text with no button trait: settings rows, Enroll, Send test email, the roster
+`+`, the events banner dismiss, both back chevrons. F-18 fixed toggle *state*;
+this is the same shape one layer up, for control *identity*.
+
+Ten further sub-44dp targets beyond F-15 I-6, including a **12dp** events-banner
+dismiss and the 20dp roster `+` whose own comment says "the glyph IS the tap
+target, as on iOS" — which is the reasoning F-15 I-6 already rejected.
+
+Also: **no field in the app is offered to a password manager.** `NemaraField`
+sets `KeyboardType.Password` and `semantics { password() }` but never
+`ContentType.Password` / `ContentType.EmailAddress`, and Android autofill will
+not offer a Compose `BasicTextField` without them. iOS gets it free from
+`SecureField`. For a population that skews older and uses generated passwords,
+that is a sign-in failure.
+
+---
+
+### F-32 — Twelve inert callbacks ship, and eleven of them look like broken buttons
+**Integration · Important · OPEN**
+
+`MainActivity` passes `{}` for twelve user-visible actions — add patient, edit
+profile, privacy, patient feedback, camera detail, add sensor, detector
+authoring, the library, detector edit, pick photo, enroll, patient feedback —
+plus `onReplayTour` in `MainShell`. **Only the Live tab says on screen that it
+is unbuilt.** The other eleven render as ordinary controls that do nothing.
+
+---
+
 ### F-3 — Scene luma is measured on a different scale than iOS
 **Phase 6 · Important · CONFIRMED 2026-08-02 · needs a device to fix correctly**
 

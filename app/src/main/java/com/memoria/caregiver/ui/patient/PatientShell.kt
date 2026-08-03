@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -106,6 +107,13 @@ fun PatientShell(
     DisposableEffect(Unit) {
         onDispose { onLeavePatient() }
     }
+
+    // Android's universal exit, wired to the same place as the Home button.
+    // Without it, Back — and the edge swipe most people use to leave a screen —
+    // fell through to the Activity and quit the app from inside a patient.
+    // iOS has no equivalent gesture, so nothing in the port suggested it was
+    // needed. FINDINGS.md F-25.
+    BackHandler { onHome() }
 
     // A notification tap opens the patient AND names an event, so the shell must
     // land on Events rather than on Live. iOS does this with

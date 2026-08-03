@@ -1,4 +1,4 @@
-package com.memoria.caregiver.ui.patient
+package com.memoria.caregiver.ui.nav
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -9,8 +9,12 @@ import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 
 /**
- * Gives everything inside one open patient its own [ViewModelStore], cleared
- * when the caregiver leaves that patient.
+ * Gives a subtree its own [ViewModelStore], cleared when that subtree leaves
+ * composition.
+ *
+ * Used for the open patient, and for the support sheet — which without it kept
+ * one Activity-scoped ViewModel whose `dismissed` flag was never reset, so the
+ * sheet opened exactly once per process (FINDINGS.md F-24).
  *
  * ## What this fixes
  *
@@ -43,13 +47,13 @@ import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
  * problem.
  */
 @Composable
-fun PatientViewModelScope(
-    patientId: String,
+fun ScopedViewModelStore(
+    key: String,
     content: @Composable () -> Unit,
 ) {
     // Keyed on the patient: switching patients gets a fresh store, and the old
     // one is cleared by the DisposableEffect below rather than lingering.
-    val owner = remember(patientId) { PatientStoreOwner() }
+    val owner = remember(key) { ScopedStoreOwner() }
 
     DisposableEffect(owner) {
         onDispose {
@@ -72,6 +76,6 @@ fun PatientViewModelScope(
  * factory, and none of them use `SavedStateHandle` — a patient's tab state is
  * transient and iOS does not restore it either.
  */
-private class PatientStoreOwner : ViewModelStoreOwner {
+private class ScopedStoreOwner : ViewModelStoreOwner {
     override val viewModelStore: ViewModelStore = ViewModelStore()
 }
