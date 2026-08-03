@@ -196,6 +196,42 @@ emulator -avd nemara_pixel -camera-front videofile:$PWD/testdata/face-yaw-sweep.
 
 ---
 
+## 4c. The coverage gate: every iOS file must be accounted for
+
+Added 2026-08-02, after `FINDINGS.md` F-14 found four iOS screens with **no
+Android counterpart at all** — `PHeader`, `PatientDetectorsView`,
+`EventReviewView`, `SupportContactView` — one of which was only noticed because
+a shell could not be built without it.
+
+**Why nothing caught them.** Every review checked that what was built matched the
+Swift. None checked the inverse. Each phase's scope came from a list I wrote, so
+a file I left off that list was invisible to every gate afterwards — including
+the test suite, which can only test code that exists. A missing file produces no
+failing test, no compile error and no review finding. It produces nothing at
+all, which is exactly why it survives.
+
+**The gate.** Before a phase can be called done, run the sweep and account for
+every unmatched iOS file:
+
+```bash
+cd nemara-caregiver-app && find NemaraCaregiver/Features NemaraCaregiver/App \
+  -name "*.swift" | xargs -n1 basename | sed 's/\.swift$//' | sort
+```
+
+against the Android `ui/` tree. Name matching is a starting point, not the
+answer — `RootView` maps to `AuthNavHost`, `MainTabView` to `MainShell` — so
+each unmatched name resolves to exactly one of:
+
+1. **ported under a different name** — say which file, and move on;
+2. **deliberately not ported** — it must already be in `DIFFERENCES.md` or
+   `QUESTIONS.md`; if it is not, it is not deliberate, it is missing;
+3. **missing** — a row in `FINDINGS.md`.
+
+`PARITY.md` §29 enumerates *behaviours* that must survive the port. Nothing
+enumerated *files*, and that was the hole.
+
+---
+
 ## 5. Escalation — exactly what stops the machine
 
 Aryaman's standing instruction is to surface design choices before implementing.
