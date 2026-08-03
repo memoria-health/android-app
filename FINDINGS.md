@@ -316,11 +316,19 @@ eyebrow, the five rows in order with the same glyph containers, `MEMORIA v0.1`,
 and the tab bar now matching after the Terra fix. One delta, consistent with the
 two already logged: iOS's `gearshape` reads heavier than my hand-drawn ring.
 
-**The glyph deltas are one finding, not three.** Detectors' emitter dot, Events'
-waveform and Settings' gear are all the same mistake — I simplified each SF
-Symbol to what I judged "the readable core" and, seen beside the originals, each
-lost the feature that makes it legible at 24dp. Worth fixing as a set rather than
-one at a time.
+**The glyph deltas were one mistake, not three — FIXED 2026-08-03 as a set.**
+Detectors' emitter dot, Events' waveform and Settings' gear weight were all the
+same error: I simplified each SF Symbol to what I judged "the readable core", and
+beside the originals each had lost precisely the feature that makes it legible at
+24dp. The detector now draws its filled emitter plus three radiating arcs, Events
+draws many short peaks rather than one tall spike (repetition is what makes it
+read as audio rather than a chart), and the gear is stroked at 2.4 instead of the
+shared 1.9 so it does not read lighter than the filled symbols either side of it.
+Verified on the device.
+
+**The lesson generalises past icons:** "the readable core" was my judgement made
+without the original in front of me. Every one of these was wrong in the same
+direction — I removed the distinguishing feature and kept the generic shape.
 
 Five screens captured and not yet compared: welcome, login, patient live, patient
 events, patient sensors.

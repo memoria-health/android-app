@@ -61,7 +61,10 @@ internal val SettingsTabGlyph: ImageVector = ImageVector.Builder(
     viewportHeight = VIEWPORT,
 ).path(
     stroke = SolidColor(Color.Black),
-    strokeLineWidth = STROKE,
+    // 2.4 rather than the shared 1.9: beside iOS's `gearshape` the ring read
+    // noticeably lighter than the filled symbols either side of it, so the bar
+    // looked inconsistent (FINDINGS.md F-34).
+    strokeLineWidth = 2.4f,
     strokeLineCap = StrokeCap.Round,
     strokeLineJoin = StrokeJoin.Round,
 ) {
@@ -126,12 +129,22 @@ internal val EventsTabGlyph: ImageVector = ImageVector.Builder(
     strokeLineCap = StrokeCap.Round,
     strokeLineJoin = StrokeJoin.Round,
 ) {
-    moveTo(2f, 12f)
-    lineTo(6f, 12f)
-    lineTo(9f, 5f)
-    lineTo(13f, 19f)
-    lineTo(16f, 12f)
-    lineTo(22f, 12f)
+    // Many short peaks, not one tall one. `waveform.path` reads as AUDIO because
+    // of its repetition; a single spike reads as a chart. Same mistake as the
+    // detector dot (FINDINGS.md F-34).
+    moveTo(1.6f, 12f)
+    lineTo(4f, 12f)
+    lineTo(5.4f, 8.4f)
+    lineTo(7f, 15.6f)
+    lineTo(8.6f, 6.6f)
+    lineTo(10.3f, 17.4f)
+    lineTo(12f, 4.8f)
+    lineTo(13.7f, 17.4f)
+    lineTo(15.4f, 8.4f)
+    lineTo(17f, 14.4f)
+    lineTo(18.4f, 10.8f)
+    lineTo(20f, 12f)
+    lineTo(22.4f, 12f)
 }.build()
 
 /** `camera.fill` — the patient Sensors tab. */
@@ -160,8 +173,9 @@ internal val SensorsTabGlyph: ImageVector = ImageVector.Builder(
 /**
  * `sensor.tag.radiowaves.forward.fill` — the patient Detectors tab.
  *
- * A dot with two arcs radiating right, which is the readable core of the SF
- * Symbol at tab-bar size; the full symbol's third arc closes up to noise.
+ * A filled emitter dot with three arcs radiating right. An earlier version drew
+ * the arcs alone, on the theory that the dot was detail — beside the original it
+ * read as a bracket, not a sensor. FINDINGS.md F-34.
  */
 internal val DetectorsTabGlyph: ImageVector = ImageVector.Builder(
     name = "sensor.tag.radiowaves.forward.fill",
@@ -169,13 +183,24 @@ internal val DetectorsTabGlyph: ImageVector = ImageVector.Builder(
     defaultHeight = VIEWPORT.dp,
     viewportWidth = VIEWPORT,
     viewportHeight = VIEWPORT,
-).path(
+).path(fill = SolidColor(Color.Black)) {
+    // The emitter. Without it the arcs read as a bracket rather than a sensor —
+    // the dot is what makes the symbol legible at 24dp, and dropping it as
+    // "simplification" was the mistake (FINDINGS.md F-34).
+    moveTo(6.6f, 12f)
+    arcToRelative(2.1f, 2.1f, 0f, true, true, -4.2f, 0f)
+    arcToRelative(2.1f, 2.1f, 0f, true, true, 4.2f, 0f)
+    close()
+}.path(
     stroke = SolidColor(Color.Black),
     strokeLineWidth = STROKE,
     strokeLineCap = StrokeCap.Round,
 ) {
-    moveTo(6f, 8f)
-    quadTo(9.5f, 12f, 6f, 16f)
-    moveTo(11f, 6f)
-    quadTo(16f, 12f, 11f, 18f)
+    // Three arcs radiating right, growing outward, as the SF Symbol does.
+    moveTo(9f, 8.6f)
+    quadTo(11.6f, 12f, 9f, 15.4f)
+    moveTo(13f, 6.6f)
+    quadTo(17f, 12f, 13f, 17.4f)
+    moveTo(17f, 4.8f)
+    quadTo(22.2f, 12f, 17f, 19.2f)
 }.build()
