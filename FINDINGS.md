@@ -662,13 +662,18 @@ Three deltas:
 2. **The Events tab glyph is a single zigzag where iOS draws a multi-peak
    waveform.** `waveform.path` on iOS has many short peaks; mine has one large
    one, so at a glance it reads as a chart rather than audio.
-3. **The patient avatar shows its serif initial on Android and nothing on iOS.**
-   Worth checking rather than assuming: iOS may hide the letter once a
-   `photoStorageKey` exists, where Android keeps it visible under the image.
-   Android's own doc says the letter stays visible during `.empty` / `.failure`,
-   citing the Swift — so either the doc or the behaviour is wrong. **This is the
-   one on the list that could be a genuine logic difference rather than a
-   drawing one**, and it is not settled.
+3. **The patient avatar looked letter-less on iOS — RESOLVED, not a difference.**
+   `NemaraAvatar.swift` always draws `initialsBackground` (circle plus letter)
+   and overlays the `AsyncImage`, which is `Color.clear` on both `.empty` and
+   `.failure`. So the letter stays visible on iOS exactly as Android's doc
+   claims. The iOS capture looked empty because iOS **loaded the photo** — and
+   the photo I uploaded for testing was a downscaled screenshot of the mostly
+   beige Welcome screen, so it rendered as a beige circle.
+
+   This confirms F-21 a second way: the iOS simulator shares the host network and
+   resolves the LAN-IP storage URL; the Android emulator cannot. **Nothing to
+   fix in the avatar.** Recording it because "iOS shows no letter" was a
+   plausible-looking parity bug that would have cost someone a day.
 
 Six screens are captured and not yet compared: welcome, login, app settings,
 patient live, patient events, patient sensors.
