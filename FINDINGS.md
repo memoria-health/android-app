@@ -648,7 +648,32 @@ that is a sign-in failure.
 ---
 
 ### F-32 — Twelve inert callbacks ship, and eleven of them look like broken buttons
-**Integration · Important · OPEN**
+**Integration · Important · FIXED and DEVICE-WALKED 2026-08-03**
+
+Eleven callbacks now reach real screens. **Eight walked on the device**, tapping
+by resolved `uiautomator` bounds rather than guessed coordinates — guessing is
+what produced the retracted F-35, and one guess in this very walk hit the roster
+avatar instead of the `+` and another launched Google Assistant:
+
+| Destination | Result |
+|---|---|
+| roster row → patient shell | opens |
+| Detectors → Add a custom detector | "New detector" |
+| Detectors → Add from detection library | opens |
+| patient header Feedback pill | "FROM THE FOUNDERS · We read every message." |
+| patient Settings tab | "Margaret Doyle · Parent · Goes by Margaret · 78 yrs" |
+| roster avatar → Edit profile | opens |
+| Sensors → Add a sensor | Phone / Memoria™ Sensor tabs, room, icons, Generate code |
+| Settings → Add another patient | "New patient · BASIC PROFILE" |
+
+**Zero fatal exceptions across the entire walk.**
+
+Not walked, because each needs something that does not exist yet: camera detail
+(Margaret has no cameras), enrollment (needs the camera permission flow and a
+camera), photo pick (needs the picker). `onPrivacy` remains an honest stub —
+`PrivacyPolicyView` has no Android port (F-14).
+
+**Original entry, for the record:**
 
 `MainActivity` passes `{}` for twelve user-visible actions — add patient, edit
 profile, privacy, patient feedback, camera detail, add sensor, detector
