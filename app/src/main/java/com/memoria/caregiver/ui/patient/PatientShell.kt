@@ -19,7 +19,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import com.memoria.caregiver.ui.support.SupportButton
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.memoria.caregiver.ui.nav.DetectorsTabGlyph
@@ -34,6 +37,7 @@ import com.memoria.caregiver.ui.events.EventsListScreen
 import com.memoria.caregiver.ui.events.EventsListViewModel
 import com.memoria.caregiver.ui.theme.Ink
 import com.memoria.caregiver.ui.theme.Ink3
+import com.memoria.caregiver.ui.theme.Terra
 import com.memoria.caregiver.ui.theme.Paper
 import com.memoria.caregiver.ui.theme.PaperDim
 
@@ -83,6 +87,12 @@ fun PatientShell(
      */
     hasFocusedEvent: Boolean = false,
     modifier: Modifier = Modifier,
+    /**
+     * Re-applied here because the patient bundle covers the main shell, which
+     * hides that shell's overlay. iOS re-applies `.supportButtonOverlay()` on
+     * `PatientShell` for exactly this reason.
+     */
+    onContactSupport: () -> Unit = {},
     liveContent: @Composable () -> Unit,
     camerasContent: @Composable () -> Unit,
     detectorsContent: @Composable () -> Unit,
@@ -131,9 +141,19 @@ fun PatientShell(
                         },
                         label = { Text(entry.title, style = NemaraType.caption) },
                         colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = Ink,
+                            // Terra, because `NemaraCaregiverApp` applies
+                            // `.tint(NemaraColor.terra)` and SwiftUI tints the
+                            // SELECTED tab item with it. Android was using Ink,
+                            // so the active tab was the same colour as the
+                            // inactive ones and only the pill distinguished it.
+                            selectedIconColor = Terra,
+                            selectedTextColor = Terra,
                             unselectedIconColor = Ink3,
-                            indicatorColor = PaperDim,
+                            unselectedTextColor = Ink3,
+                            // Transparent: iOS draws no pill behind the active
+                            // item, and Material3 adds one by default. The
+                            // colour IS the selection indicator on both now.
+                            indicatorColor = Color.Transparent,
                         ),
                     )
                 }
@@ -185,6 +205,13 @@ fun PatientShell(
                     PatientTab.DETECTORS -> detectorsContent()
                     PatientTab.SETTINGS -> settingsContent()
                 }
+
+                SupportButton(
+                    onClick = onContactSupport,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 18.dp, bottom = 90.dp),
+                )
             }
         }
     }

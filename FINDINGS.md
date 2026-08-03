@@ -350,6 +350,45 @@ REQ-22 should be read as "wired, server side proven, client side unproven".
 
 ---
 
+### F-22 — Screenshot parity works, and its first run found two gaps
+**Parity · 2026-08-02 · both FIXED same day**
+
+The harness exists: `scratchpad/ios-parity/run.sh` captures all nine iOS screens
+(welcome, login, roster, app settings, and all five patient tabs) in one
+idempotent command. **It never touches `nemara-caregiver-app`** — XCUITest can
+drive an installed app by bundle identifier without owning its source, which is
+what unblocked this after weeks of assuming a test target had to be added to a
+deployed repo.
+
+The first side-by-side comparison, of the roster alone, found two things no unit
+test could:
+
+**1. The perpetual support button was missing entirely.** iOS applies
+`.supportButtonOverlay()` on `RootView` **and again** on `PatientShell` — twice,
+because the patient cover hides the presenter-level overlay. `SupportButton.kt`
+existed on Android, built and tested, and **was applied nowhere**. The same
+built-but-unwired shape as F-10, and it took a screenshot to see it.
+
+**2. The selected tab was the wrong colour.** `NemaraCaregiverApp` applies
+`.tint(NemaraColor.terra)`, which SwiftUI uses for the SELECTED tab item.
+Android used Ink for both states, so the active tab was the same colour as the
+inactive ones and only Material's pill distinguished it — and iOS draws no pill.
+Now Terra with a transparent indicator, so the colour is the selection on both.
+
+**Also confirmed by the comparison, and useful:** iOS renders Margaret's photo
+while Android shows the serif initial. That is F-21 exactly — the iOS simulator
+shares the host network so the LAN-IP storage URL resolves, and the Android
+emulator cannot reach it. The comparison turned a suspicion into a demonstrated
+difference.
+
+**The harness's own finding, worth acting on:** the iOS app has **zero**
+`accessibilityIdentifier`s — `grep` returns 0 hits across the app. Every
+selector is bound to visible English copy, so any copy change or localisation
+silently breaks the capture. Adding identifiers would make parity a durable gate
+rather than a one-off, and would serve the Android port equally.
+
+---
+
 ### F-3 — Scene luma is measured on a different scale than iOS
 **Phase 6 · Important · CONFIRMED 2026-08-02 · needs a device to fix correctly**
 

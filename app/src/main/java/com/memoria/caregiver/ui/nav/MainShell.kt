@@ -18,7 +18,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import com.memoria.caregiver.ui.support.SupportButton
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.memoria.caregiver.ui.theme.NemaraType
@@ -30,6 +33,7 @@ import com.memoria.caregiver.ui.settings.AppSettingsScreen
 import com.memoria.caregiver.ui.settings.AppSettingsViewModel
 import com.memoria.caregiver.ui.theme.Ink
 import com.memoria.caregiver.ui.theme.Ink3
+import com.memoria.caregiver.ui.theme.Terra
 import com.memoria.caregiver.ui.theme.Paper
 import com.memoria.caregiver.ui.theme.PaperDim
 import kotlinx.coroutines.launch
@@ -69,6 +73,13 @@ fun MainShell(
     onPrivacy: () -> Unit,
     onContactSupport: () -> Unit,
     modifier: Modifier = Modifier,
+    /**
+     * iOS applies `.supportButtonOverlay()` on RootView AND again on
+     * PatientShell, because the patient cover would otherwise hide the
+     * presenter-level overlay. Same here: this shell draws it, and the patient
+     * shell draws its own.
+     */
+    showSupportButton: Boolean = true,
 ) {
     val link by deepLink.state.collectAsState()
 
@@ -126,16 +137,26 @@ fun MainShell(
                         },
                         label = { Text(entry.title, style = NemaraType.caption) },
                         colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = Ink,
+                            // Terra, because `NemaraCaregiverApp` applies
+                            // `.tint(NemaraColor.terra)` and SwiftUI tints the
+                            // SELECTED tab item with it. Android was using Ink,
+                            // so the active tab was the same colour as the
+                            // inactive ones and only the pill distinguished it.
+                            selectedIconColor = Terra,
+                            selectedTextColor = Terra,
                             unselectedIconColor = Ink3,
-                            indicatorColor = PaperDim,
+                            unselectedTextColor = Ink3,
+                            // Transparent: iOS draws no pill behind the active
+                            // item, and Material3 adds one by default. The
+                            // colour IS the selection indicator on both now.
+                            indicatorColor = Color.Transparent,
                         ),
                     )
                 }
             }
         },
     ) { insets ->
-        Box(Modifier.padding(insets)) {
+        Box(Modifier.padding(insets).fillMaxSize()) {
             when (tab) {
                 MainTab.HOME -> {
                     val state by rosterViewModel.state.collectAsState()
@@ -175,6 +196,19 @@ fun MainShell(
                         onDismissDeleteError = settingsViewModel::dismissDeleteError,
                     )
                 }
+            }
+
+            if (showSupportButton) {
+                SupportButton(
+                    onClick = onContactSupport,
+                    // iOS: `.padding(.trailing, 18).padding(.bottom, 90)` in
+                    // `supportButtonOverlay()`. The 90 clears the tab bar; here
+                    // the Scaffold has already inset for it, so this sits
+                    // relative to the content area the same way.
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 18.dp, bottom = 90.dp),
+                )
             }
         }
     }

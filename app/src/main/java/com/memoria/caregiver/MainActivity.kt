@@ -166,6 +166,7 @@ class MainActivity : ComponentActivity() {
                                             patientId = patientId,
                                             resolvePhotoUrl = rosterViewModel::resolvePhotoUrl,
                                             onHome = { env.deepLink.closePatient() },
+                                            onContactSupport = { showSupport = true },
                                         )
                                     },
                                     onAddPatient = {},
@@ -219,6 +220,7 @@ private fun PatientRoute(
     patientId: String,
     resolvePhotoUrl: suspend (String) -> String?,
     onHome: () -> Unit,
+    onContactSupport: () -> Unit,
 ) {
     val patients by env.api.patientsFlow.collectAsState()
     val patient = patients.firstOrNull { it.id == patientId }
@@ -229,7 +231,7 @@ private fun PatientRoute(
     }
 
     PatientViewModelScope(patientId) {
-        PatientTabs(env, patient, patientId, resolvePhotoUrl, onHome)
+        PatientTabs(env, patient, patientId, resolvePhotoUrl, onHome, onContactSupport)
     }
 }
 
@@ -248,6 +250,7 @@ private fun PatientTabs(
     patientId: String,
     resolvePhotoUrl: suspend (String) -> String?,
     onHome: () -> Unit,
+    onContactSupport: () -> Unit,
 ) {
     val eventsViewModel: EventsListViewModel = viewModel(
         // Keyed on the patient, so switching patients does not carry the
@@ -318,6 +321,7 @@ private fun PatientTabs(
         // that renders something plausible but inert is the exact failure
         // FINDINGS.md F-10 and H-12 are both about.
         onFeedback = {},
+        onContactSupport = onContactSupport,
         // The single LiveKit teardown point, and it is deliberately empty
         // rather than absent. LiveKitClient exists and is tested but is not
         // in AppEnvironment yet, because nothing mints a token until the Live
