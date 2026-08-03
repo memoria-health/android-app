@@ -33,8 +33,75 @@ into a file — is the finding that matters most here.**
 
 ## OPEN
 
+### F-41 — The exit-door picker is built and still unreachable; it needs a frame grab
+**Phase 4 · Important · OPEN — client work, unblocked by F-40**
+
+`WanderingDoorPickerScreen` is the one screen left with zero callers. It is not
+missing: 900-odd lines, tested, with the tap-placement geometry and the
+stacked-detection filter already ported. `CameraHosts` shows a `NotBuiltScreen`
+in its place.
+
+Until today that screen's stated reason was "live video is not connected in this
+build yet". F-40 made that false, and a wrong explanation on a real screen is
+worse than a vague one, so it has been corrected to name the actual gap.
+
+**What is actually missing.** iOS has two files Android does not:
+`WanderingDoorCache` (which reuses the Live tab's room if it is already up,
+otherwise mints a viewer token, connects, grabs, and tears down again so it never
+disturbs an active Live view) and `LiveKitFrameCapture` (one frame off the track
+as JPEG). Plus the background door-detection call the cache makes.
+
+**The hard half already exists.** `ui/live/VideoFramePixels.i420ToArgb` is the
+exact I420 to ARGB conversion the blur renderer uses, strides and colour range
+handled and JVM-tested. So this is a `VideoSink`, a `Bitmap`, a JPEG encode and a
+cache — not a new subsystem.
+
+**Failure guarded:** an explanation that was true when written and false after
+the next change. The reachability audit finds the screen; only reading the reason
+string finds the stale claim.
+
+---
+
 ### F-40 — The Live tab is a stub: 5,791 lines of live video are built, tested and unreachable
-**Phase 4 · Critical for the product · OPEN — client work, doable now**
+**Phase 4 · Critical for the product · FIXED 2026-08-03**
+
+**Resolution.** The three missing joins are in place and the tab renders live
+video:
+
+1. `AppEnvironment` now constructs `LiveKitClient` (and the private-room
+   acknowledgement store), so PARITY.md §35's member list is complete.
+2. `ui/live/LiveViewModel.kt` is the producer that did not exist — room connect
+   with broadcaster grants, carousel selection, the 1s clock driving the desync
+   reconciler, the call machine, the bulk monitoring levers, clip capture and
+   the two privacy watchers.
+3. `MainActivity` hands `PatientShell` a `LiveHost` instead of `TabStub("Live")`,
+   and `onLeavePatient` is wired to the single room teardown point.
+
+**A seam was added rather than skipped.** `LiveKitClient` calls
+`LiveKit.create()` in its constructor, so a ViewModel holding one directly could
+not be tested on a JVM — and no test in this repository constructs one. The
+join is the piece most worth testing, so `data/livekit/LiveRoom.kt` names the
+twelve calls the ViewModel actually makes and `LiveKitClient` implements it.
+Same pattern `TalkApi`/`TalkMedia` already used one layer down. 16 tests cover
+which room is joined and with what grants, when a join is skipped, what happens
+with nobody signed in, that the bulk levers PATCH the right rows, and that the
+two teardown moments stay two. Suite: 2081 passing.
+
+**One iOS bug was designed out rather than ported.** `disconnectAll` on iOS
+needs two statements in a fixed order — collect the rows to PATCH, then flip the
+local copies — and shipping them the wrong way round is the "disconnect-all does
+nothing" bug its own comment still describes. `NemaraApiClient.flipDesiredStateLocally`
+does both in one call and returns the pre-flip rows, so the order cannot be got
+wrong.
+
+**Still not reachable, and now correctly explained:** the exit-door picker. See
+F-41 — the reason string on its `NotBuiltScreen` said live video was not
+connected, which this change made false.
+
+**The original finding follows.**
+
+---
+
 
 Found by a reachability audit rather than by use: for every `*Screen` composable,
 count the callers that are not its own declaration. Two came back zero, and one
@@ -404,9 +471,13 @@ teaches people to re-run instead of read.
 
 **Seen again 2026-08-03**, on a run with no code change that could touch it: 2065
 tests, 1 failed; `--rerun-tasks` immediately after gave 2065/2065. Which test
-failed is unknown — the rerun overwrote the HTML report before it was read, which
-is itself the trap this finding describes. Next occurrence: read
-`app/reports/tests/testDebugUnitTest/index.html` **before** re-running.
+failed was unknown that time — the rerun overwrote the HTML report before it was
+read, which is itself the trap this finding describes.
+
+**Caught properly later the same day**, by reading the log first:
+`NewPatientHostTest > a failed create says so and stays on the form`. Five of
+five passed in isolation immediately afterwards. That is the first named
+instance, and it matches the original diagnosis rather than extending it.
 
 ---
 

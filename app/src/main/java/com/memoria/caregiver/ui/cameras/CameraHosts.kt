@@ -91,13 +91,21 @@ fun CameraDetailHost(
 
             showingDoorPicker -> NotBuiltScreen(
                 title = "Exit doors",
-                // Named honestly rather than left as a dead row: the picker
-                // itself is built (`WanderingDoorPickerScreen`), but it draws
-                // boxes over a still frame pulled from the live LiveKit feed,
-                // and no LiveKit client is wired into the app yet. Wiring the
-                // screen to an empty frame would be worse than saying so.
-                reason = "Picking exit doors needs a still frame from the live " +
-                    "camera feed, and live video is not connected in this build yet.",
+                // Named honestly rather than left as a dead row. The picker
+                // itself is built (`WanderingDoorPickerScreen`) and, as of the
+                // Live tab landing, LiveKit IS connected — so the original
+                // reason here ("live video is not connected") stopped being
+                // true and was corrected rather than left to mislead.
+                //
+                // What is genuinely missing is the frame grab: iOS has
+                // `WanderingDoorCache` + `LiveKitFrameCapture`, which take one
+                // frame off the track and hand it over as a JPEG. Android has
+                // neither. The hard half already exists —
+                // `ui/live/VideoFramePixels.i420ToArgb` is the same conversion
+                // the blur renderer uses — so this is a sink, a bitmap and a
+                // cache, not a new subsystem. FINDINGS.md F-41.
+                reason = "Picking exit doors needs a still photo from this " +
+                    "sensor's live feed, and capturing one is not built yet.",
                 onBack = { showingDoorPicker = false },
                 modifier = modifier,
             )

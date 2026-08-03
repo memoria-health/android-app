@@ -287,6 +287,19 @@ hand), deliberately stubbed with a recorded reason (`WanderingDoorPickerScreen`
 is — `CameraHosts` shows `NotBuiltScreen` and says why), or **unwired**, which is
 a `FINDINGS.md` row.
 
+### When the audit finds nothing, read the reasons
+
+A screen can be reachable-by-design and still wrong. `WanderingDoorPickerScreen`
+has been legitimately stubbed for weeks with a `NotBuiltScreen` naming its
+blocker — and the moment the Live tab was wired (F-40), that blocker stopped
+being true and the caregiver-facing sentence became false. Nothing failed. The
+audit still reported one deliberate stub, exactly as before.
+
+So a stub's stated reason is a claim with an expiry date. When the thing it
+blames gets built, re-read it. F-41.
+
+---
+
 Run the same shape over `NemaraApiClient`'s public methods. Doing that turned up
 `loadMoreEvents` with no production caller — and then reading the Swift showed
 `loadEventsPage` has no view calling it either, so the Android side is *correct*

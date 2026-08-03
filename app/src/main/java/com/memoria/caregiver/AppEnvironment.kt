@@ -25,7 +25,11 @@ import com.memoria.caregiver.push.PUSH_LOG_TAG
 import com.memoria.caregiver.push.PushTokenRegistrar
 import com.memoria.caregiver.push.SharedPrefsPushTokenStore
 import com.memoria.caregiver.push.pushTokenPrefs
+import com.memoria.caregiver.data.livekit.LiveKitClient
+import com.memoria.caregiver.ui.live.InMemorySensitiveRoomAckStore
 import com.memoria.caregiver.ui.live.PeopleBlurStore
+import com.memoria.caregiver.ui.live.SensitiveRoomAckStore
+import com.memoria.caregiver.ui.live.SharedPrefsSensitiveRoomAckStore
 import com.memoria.caregiver.ui.nav.DeepLinkRouter
 import io.github.jan.supabase.auth.Auth
 import io.github.jan.supabase.createSupabaseClient
@@ -154,6 +158,43 @@ class AppEnvironment(
             "PeopleBlurStore needs a Context; AppEnvironment was built without one."
         }.getSharedPreferences(PEOPLE_BLUR_PREFS, Context.MODE_PRIVATE),
     )
+
+    /**
+     * The LiveKit room client. PARITY.md §35 lists this as an environment
+     * member, and until now it was the one member on that list that did not
+     * exist — which is the whole of why the Live tab rendered a stub
+     * (FINDINGS.md F-40).
+     *
+     * **One instance for the whole process, not one per patient.** It holds a
+     * single `Room` reused across connect/disconnect cycles, exactly as
+     * `NemaraCaregiverApp` keeps one `LiveKitClient` in `@State`. Building it
+     * per patient would leave the previous household's room connected — audio
+     * from patient A's kitchen still playing while patient B is on screen — and
+     * that is not a hypothetical: FINDINGS.md F-11 records the same shape of bug
+     * for the camera poll.
+     *
+     * Constructed eagerly rather than lazily because `init` registers the audio
+     * taps and starts collecting room events, and doing that on first *use*
+     * would mean the first connect races the collector and can miss the
+     * `TrackSubscribed` that puts the first tile on screen.
+     */
+    val liveKit = LiveKitClient(
+        context = requireNotNull(appContext) {
+            "LiveKitClient needs a Context; AppEnvironment was built without one."
+        },
+        scope = scope,
+    )
+
+    /**
+     * Which private-room explainers this caregiver has dismissed, on this
+     * device. Device-local for the same reason as [peopleBlur]: iOS keeps it in
+     * `UserDefaults`, because dismissing the card is "I have read this", not a
+     * property of the household that should follow them to another phone.
+     */
+    val sensitiveRoomAcks: SensitiveRoomAckStore = appContext
+        ?.getSharedPreferences(SENSITIVE_ROOM_ACK_PREFS, Context.MODE_PRIVATE)
+        ?.let { SharedPrefsSensitiveRoomAckStore(it) }
+        ?: InMemorySensitiveRoomAckStore()
 
     val api = NemaraApiClient(
         HttpTransport(
@@ -337,6 +378,13 @@ class AppEnvironment(
 
         /** iOS keys the same preference off `UserDefaults` directly. */
         const val PEOPLE_BLUR_PREFS = "com.memoria.caregiver.peopleblur"
+
+        /**
+         * The key inside this file is carried verbatim from iOS
+         * (`SharedPrefsSensitiveRoomAckStore.KEY`); only the file name is
+         * Android-only, same split as [EVER_ONLINE_PREFS].
+         */
+        const val SENSITIVE_ROOM_ACK_PREFS = "com.memoria.caregiver.sensitiverooms"
 
         /**
          * Same file name iOS uses, in the app's private files directory. It

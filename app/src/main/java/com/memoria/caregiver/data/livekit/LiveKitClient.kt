@@ -87,23 +87,35 @@ class LiveKitClient(
     /** The `@MainActor` analog. Must be single-threaded. */
     private val dispatcher: CoroutineContext = Dispatchers.Main.immediate,
     private val log: LiveKitLog = AndroidLiveKitLog,
-) {
+) : LiveRoom {
 
     /**
      * The underlying room. One instance, reused across connect / disconnect
      * cycles, exactly as the Swift keeps one `Room()` for the app's lifetime.
+     *
+     * Exposed (via [LiveRoom]) for exactly one reason: LiveKit's Compose
+     * renderer binds a `VideoTrack` to the `Room` that owns it, so
+     * `LiveVideoTile` needs the instance. iOS has the same coupling —
+     * `LiveKitVideoView(room:track:)`.
+     *
+     * **Read it, do not drive it.** Connect, disconnect and subscription changes
+     * all go through the methods below, which keep [_state],
+     * [_videoTracksByIdentity] and the audio gate in step with the room. Calling
+     * `room.disconnect()` from outside would leave every one of those stale, and
+     * the UI would keep rendering tiles for a room that is gone.
      */
-    private val room: Room = LiveKit.create(context.applicationContext)
+    override val room: Room = LiveKit.create(context.applicationContext)
 
     private val _state = MutableStateFlow<LiveKitConnectionState>(LiveKitConnectionState.Disconnected)
 
     /** Connection state, mirrored from the room's own transitions. */
-    val state: StateFlow<LiveKitConnectionState> = _state.asStateFlow()
+    override val state: StateFlow<LiveKitConnectionState> = _state.asStateFlow()
 
     private val _videoTracksByIdentity = MutableStateFlow<Map<String, VideoTrack>>(emptyMap())
 
     /** Subscribed remote video tracks, keyed by publisher identity. The carousel fills its tiles from this. */
-    val videoTracksByIdentity: StateFlow<Map<String, VideoTrack>> = _videoTracksByIdentity.asStateFlow()
+    override val videoTracksByIdentity: StateFlow<Map<String, VideoTrack>> =
+        _videoTracksByIdentity.asStateFlow()
 
     private val _audioTracksByIdentity = MutableStateFlow<Map<String, AudioTrack>>(emptyMap())
 
@@ -120,7 +132,7 @@ class LiveKitClient(
      * Rolling per-camera audio peaks, 0.0-1.0, newest last, trimmed to
      * [AUDIO_LEVEL_CAPACITY]. Safe to hand straight to `NemaraWaveform`.
      */
-    val audioLevels: StateFlow<Map<String, List<Float>>> = _audioLevels.asStateFlow()
+    override val audioLevels: StateFlow<Map<String, List<Float>>> = _audioLevels.asStateFlow()
 
     private val _isMicrophonePublished = MutableStateFlow(false)
 
@@ -130,7 +142,7 @@ class LiveKitClient(
     private val _currentRoom = MutableStateFlow<String?>(null)
 
     /** The room name (`patient_<patient_id>`) we're connected to; null when disconnected. */
-    val currentRoom: StateFlow<String?> = _currentRoom.asStateFlow()
+    override val currentRoom: StateFlow<String?> = _currentRoom.asStateFlow()
 
     private val _audioEnabledByIdentity = MutableStateFlow<Set<String>>(emptySet())
 
@@ -138,7 +150,8 @@ class LiveKitClient(
      * Cameras the caregiver has unmuted with the per-tile button. Talk overlays
      * an extra unmute on top of this without changing it — see [AudioGate].
      */
-    val audioEnabledByIdentity: StateFlow<Set<String>> = _audioEnabledByIdentity.asStateFlow()
+    override val audioEnabledByIdentity: StateFlow<Set<String>> =
+        _audioEnabledByIdentity.asStateFlow()
 
     /**
      * Concrete remote-audio refs, which the protocol-typed [AudioTrack] in
@@ -185,7 +198,7 @@ class LiveKitClient(
      * [cameraConnectivity] with them — same rule, same answer, and the tile
      * repaints when either signal moves.
      */
-    fun connectivity(cam: Camera): CameraConnectivity = cameraConnectivity(
+    override fun connectivity(cam: Camera): CameraConnectivity = cameraConnectivity(
         identity = cam.livekitIdentity,
         state = _state.value,
         hasVideoTrack = cam.livekitIdentity?.let { _videoTracksByIdentity.value[it] } != null,
@@ -196,7 +209,7 @@ class LiveKitClient(
 
     // ---- Connection ----
 
-    suspend fun connect(url: String, token: String, roomName: String) {
+    override suspend fun connect(url: String, token: String, roomName: String) {
         log.debug("[LiveKit] connect → room=$roomName url=$url (prevState=${_state.value})")
         if (_state.value != LiveKitConnectionState.Disconnected) {
             room.disconnect()
@@ -247,7 +260,7 @@ class LiveKitClient(
      *
      * Idempotent and cheap; safe to call from every Realtime `cameras` update.
      */
-    fun ensureSubscribed(identity: String, reconnectIfAbsent: Boolean = true) {
+    override fun ensureSubscribed(identity: String, reconnectIfAbsent: Boolean) {
         if (_state.value != LiveKitConnectionState.Connected) {
             log.debug("[LiveKit] ensureSubscribed: identity=$identity skipped — room not connected (state=${_state.value})")
             return
@@ -275,7 +288,7 @@ class LiveKitClient(
         }
     }
 
-    fun disconnect() {
+    override fun disconnect() {
         room.disconnect()
         // Null the tracks now so the UI shows empty tiles immediately, rather
         // than after the next event round-trip.
@@ -301,7 +314,7 @@ class LiveKitClient(
      * overlays an additional unmute, it does not clear the caregiver's listen
      * choices.
      */
-    fun setRemoteAudioPlayback(enabledFor: String?) {
+    override fun setRemoteAudioPlayback(enabledFor: String?) {
         gate.setActiveCall(enabledFor)
         if (enabledFor == null) {
             // Drop the drawn levels immediately so the waveform goes flat the
@@ -321,7 +334,7 @@ class LiveKitClient(
      *
      * @return the new state, true = audible.
      */
-    fun toggleAudio(forIdentity: String): Boolean {
+    override fun toggleAudio(forIdentity: String): Boolean {
         val nowEnabled = gate.toggle(forIdentity)
         _audioEnabledByIdentity.value = gate.audioEnabledByIdentity
         applyAudioGate()
@@ -335,7 +348,7 @@ class LiveKitClient(
      * [AudioGate.revoke] for why dropping the set entry is the load-bearing
      * half.
      */
-    fun revokeAudio(forIdentity: String) {
+    override fun revokeAudio(forIdentity: String) {
         gate.revoke(forIdentity)
         _audioEnabledByIdentity.value = gate.audioEnabledByIdentity
         remoteAudioTracksByIdentity[forIdentity]?.setVolume(MUTED_VOLUME)
@@ -364,7 +377,7 @@ class LiveKitClient(
      * Requires `RECORD_AUDIO`; the caller is responsible for holding it before
      * calling with `enable = true`.
      */
-    suspend fun publishMicrophone(enable: Boolean) {
+    override suspend fun publishMicrophone(enable: Boolean) {
         val current = _state.value
         if (current != LiveKitConnectionState.Connected && current != LiveKitConnectionState.Reconnecting) {
             throw LiveKitClientError.NotConnected

@@ -87,6 +87,19 @@ android {
                     events("passed", "skipped", "failed")
                     exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
                 }
+                // Gradle gives a Test task 512m by default, which this suite has
+                // now outgrown. Robolectric loads a ~200MB instrumented
+                // android-all jar per sandbox and keeps sandboxes cached, so the
+                // failure mode is not a slow suite — it is an OutOfMemoryError
+                // thrown from inside `ApkAssets.nativeLoad` in whichever test
+                // happens to be running when the heap fills. That reads as a
+                // broken test rather than an exhausted JVM, and it lands on a
+                // different test each run.
+                //
+                // Seen for real when LiveViewModelTest (16 tests, Robolectric)
+                // was added: ThemeTest failed, having nothing to do with the
+                // change.
+                it.maxHeapSize = "2g"
                 // The pass-count summary and the ran-at-all guard both live in
                 // the verifyUnitTestsRan finalizer below, reading the results
                 // XML. Test.afterSuite would be the obvious place for the

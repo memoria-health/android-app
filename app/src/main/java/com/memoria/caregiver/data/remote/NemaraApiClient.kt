@@ -265,6 +265,59 @@ class NemaraApiClient(
     }
 
     /**
+     * Flip `camerasPaused` in the cache with no request, so the carousel and the
+     * Settings toggle move on the tap rather than after the round trip.
+     *
+     * iOS writes `env.api.patients[idx].camerasPaused` in place; its arrays are
+     * `@Observable`, so a subscript write is a UI update. Kotlin's flows are
+     * read-only from outside, so the same write needs a name.
+     *
+     * The caller owns the rollback: keep the previous value, PATCH, and call
+     * this again with the old value on failure. That is what
+     * `PatientLiveView.toggleMonitoring` does.
+     */
+    fun setCamerasPausedLocally(patientId: String, paused: Boolean) {
+        patients = patients.map {
+            if (it.id == patientId) it.copy(camerasPaused = paused) else it
+        }
+    }
+
+    /**
+     * Flip the local **intent** of every camera currently at [from] to [to], and
+     * return the rows as they were **before** the flip.
+     *
+     * Returning them is the point, and it is a deliberate departure from the
+     * Swift's shape. iOS does this as two statements — collect the cameras to
+     * PATCH, *then* flip the local copies — and getting them the wrong way round
+     * is a real bug it shipped: the PATCH loop filters on
+     * `desired_state == connected`, so flipping first left the loop with zero
+     * matches, nothing was sent, and the next `loadCameras` brought every camera
+     * back. The comment above `disconnectAll` in `PatientLiveView.swift` still
+     * describes it as "the disconnect-all does nothing bug".
+     *
+     * One call cannot be ordered wrongly, so the bug has nowhere to live.
+     *
+     * Hidden (`disabled`) cameras are never touched, matching iOS's filter: the
+     * caregiver has already said they do not want them, and reviving one from a
+     * bulk button would override that silently.
+     */
+    fun flipDesiredStateLocally(
+        patientId: String,
+        from: Camera.DesiredState,
+        to: Camera.DesiredState,
+    ): List<Camera> {
+        val cams = camerasByPatient[patientId] ?: return emptyList()
+        val affected = cams.filter { it.desiredState == from && !it.disabled }
+        if (affected.isEmpty()) return emptyList()
+        camerasByPatient = camerasByPatient + (
+            patientId to cams.map {
+                if (it.desiredState == from && !it.disabled) it.copy(desiredState = to) else it
+            }
+            )
+        return affected
+    }
+
+    /**
      * A 404 is swallowed inside [PatientsApi.deletePatient]: the row is already
      * gone, which satisfies the caller's intent, and the local cleanup below
      * still has to run either way.

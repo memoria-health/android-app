@@ -32,6 +32,9 @@ import com.memoria.caregiver.ui.components.NemaraButton
 import com.memoria.caregiver.ui.components.NemaraButtonVariant
 import com.memoria.caregiver.ui.components.NemaraEyebrow
 import com.memoria.caregiver.ui.home.RosterViewModel
+import com.memoria.caregiver.data.AppConfig
+import com.memoria.caregiver.ui.live.LiveHost
+import com.memoria.caregiver.ui.live.LiveViewModel
 import com.memoria.caregiver.ui.nav.AuthNavHost
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.key
@@ -519,6 +522,31 @@ private fun PatientTabs(
         },
     )
 
+    val liveViewModel: LiveViewModel = viewModel(
+        // Keyed on the patient, like every other patient-scoped ViewModel here.
+        // A constant key would hand patient B the ViewModel that is still
+        // connected to patient A's room — audio from one household playing under
+        // another household's tiles. FINDINGS.md F-23 is the same mistake made
+        // with a string template that did not interpolate.
+        key = "live:$patientId",
+        factory = viewModelFactory {
+            initializer {
+                LiveViewModel(
+                    patientId = patientId,
+                    api = env.api,
+                    liveKit = env.liveKit,
+                    // Read at mint time, not captured: a token minted for a
+                    // caregiver who has since signed out is a token for the
+                    // wrong household.
+                    caregiverId = { env.auth.currentCaregiver.value?.id },
+                    ackStore = env.sensitiveRoomAcks,
+                    peopleBlur = env.peopleBlur,
+                    clipCaptureEnabled = AppConfig.enableClipCapture,
+                )
+            }
+        },
+    )
+
     // First-open data-collection consent. Presented from the shell, as iOS does
     // from PatientShell — not from the Settings tab — because it must appear
     // when the caregiver first opens the patient, wherever they land.
@@ -571,19 +599,26 @@ private fun PatientTabs(
         // presentation point on PatientShell for exactly the same reason.
         onFeedback = { destination = PatientDestination.Feedback },
         onContactSupport = onContactSupport,
-        // The single LiveKit teardown point, and it is deliberately empty
-        // rather than absent. LiveKitClient exists and is tested but is not
-        // in AppEnvironment yet, because nothing mints a token until the Live
-        // tab is built. The SEAM is what matters now: iOS disconnects when
-        // the patient cover is dismissed and never on a sub-tab switch, and
-        // PatientShell already keys its DisposableEffect that way. When the
-        // client lands, the disconnect goes here and nowhere else.
-        onLeavePatient = { /* TODO(live-tab): env.liveKit.disconnect() */ },
+        // The single LiveKit teardown point. iOS disconnects when the patient
+        // cover is dismissed and never on a sub-tab switch, and PatientShell
+        // keys its DisposableEffect that way — which is what makes
+        // Live → Events → Live resume instantly instead of re-joining the room
+        // every time. The call is ended earlier and separately, by LiveHost;
+        // see LiveViewModel's class comment for why those are two moments.
+        onLeavePatient = liveViewModel::onClosePatient,
         // Only when the router names an event for THIS patient. Without the
         // patient check, a stale focus id from another household would drag
         // this shell onto Events for no reason.
         hasFocusedEvent = link.openPatientId == patientId && link.focusEventId != null,
-        liveContent = { TabStub("Live") },
+        liveContent = {
+            LiveHost(
+                viewModel = liveViewModel,
+                // The same destination the Sensors tab pushes, so a camera
+                // opened from a tile and one opened from the list are one
+                // screen with one state.
+                onOpenCameraDetail = { destination = PatientDestination.Camera(it) },
+            )
+        },
         camerasContent = {
             val cameraState by camerasViewModel.state.collectAsState()
             CameraListScreen(
