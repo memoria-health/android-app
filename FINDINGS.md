@@ -521,7 +521,15 @@ produced them.
 ---
 
 ### F-29 — The events feed poll is not lifecycle-gated
-**Phase 3 · Important · OPEN**
+**Phase 3 · Important · FIXED 2026-08-03**
+
+Wrapped in `repeatOnLifecycle(STARTED)`, so the poll stops when the process
+backgrounds and resumes when it returns — the same guarantee
+`MemoriaApplication`'s observer gives the camera poll. A `LaunchedEffect` alone
+does not survive-check anything: Android does not suspend the process the way
+iOS does, which is the whole reason both polls needed explicit gating.
+
+**Original entry, for the record:**
 
 `PatientShell` launches `runFeedPoll()` from a `LaunchedEffect`; neither it nor
 `viewModelScope` is cancelled when the process backgrounds. F-15 C-2 fixed

@@ -214,9 +214,18 @@ all, which is exactly why it survives.
 every unmatched iOS file:
 
 ```bash
-cd nemara-caregiver-app && find NemaraCaregiver/Features NemaraCaregiver/App \
-  -name "*.swift" | xargs -n1 basename | sed 's/\.swift$//' | sort
+cd nemara-caregiver-app && find NemaraCaregiver -name "*.swift" \
+  | xargs -n1 basename | sed 's/\.swift$//' | sort -u
 ```
+
+**`find NemaraCaregiver`, not `Features` and `App`.** The first version of this
+gate globbed only those two directories — 61 of 103 files — and never swept
+`Services/`, `Models/`, `Networking/` or `DesignSystem/`. That is exactly where
+`Analytics.swift` (295 lines, entirely unported, FINDINGS.md F-28),
+`AnalyticsView.swift`, `WanderingDoorCache.swift` and `LegalConstants.swift`
+live. **The gate written to catch missing files had the same blind spot that
+produced them**, and a later review found them by reading rather than by the
+gate. Sweep everything.
 
 against the Android `ui/` tree. Name matching is a starting point, not the
 answer — `RootView` maps to `AuthNavHost`, `MainTabView` to `MainShell` — so

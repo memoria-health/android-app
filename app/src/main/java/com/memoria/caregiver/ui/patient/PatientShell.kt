@@ -22,6 +22,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.ui.graphics.Color
 import com.memoria.caregiver.ui.support.SupportButton
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -199,7 +202,20 @@ fun PatientShell(
                         // new one. Belt and braces with MainShell's key() —
                         // this one also covers a ViewModel swapped under a
                         // shell that did not leave composition.
-                        LaunchedEffect(eventsViewModel) { eventsViewModel.runFeedPoll() }
+                        // Gated on the process being foregrounded, not just on
+                        // the tab being composed. A LaunchedEffect survives the
+                        // app going to the background — Android does not suspend
+                        // the process the way iOS does — so parking the app on
+                        // Events kept issuing GET /events every 20s
+                        // indefinitely, backgrounded, on cellular. Exactly the
+                        // defect F-15 C-2 fixed for the camera poll, which this
+                        // one was not given. FINDINGS.md F-29.
+                        val lifecycleOwner = LocalLifecycleOwner.current
+                        LaunchedEffect(eventsViewModel, lifecycleOwner) {
+                            lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                                eventsViewModel.runFeedPoll()
+                            }
+                        }
 
                         EventsListScreen(
                             state = state,

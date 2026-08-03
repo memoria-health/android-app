@@ -286,5 +286,31 @@ effect its caller still owes — `live.markEverOnline` after `loadCameras` and
 
 ---
 
+## D16 — `WanderingDoorCache` is not ported; the picker fetches on open
+**Category:** deliberate omission
+**iOS:** `Features/Patient/Cameras/WanderingDoorCache.swift` (128 lines) — per-camera
+frame and door caches, in-flight task dedupe, `reloadFrame`'s cancel-and-invalidate, a
+LiveKit connect/reuse/teardown pipeline with a 30×200ms track wait, and
+`prewarmDoorFrame()` called from a `.task(id:)` so the door picker opens instantly.
+**Android:** no counterpart. The picker fetches when it opens.
+
+**Why:** the cache is a **latency** optimisation with no state anyone reads. Nothing
+about which doors are configured depends on it — that lives in the API and the
+detector rows. Porting a LiveKit frame-prewarm pipeline before the Live tab itself
+exists would have meant building the pipeline twice.
+
+**What is genuinely lost, and it is not nothing:** the picker opens slower, and
+`onRescan` currently has nothing behind it — `WanderingDoorPickerScreen`'s
+`WanderingDoorPhase.Blocked` state can never be constructed with real text, so its
+three sentences exist nowhere on Android. That is a real gap, recorded here rather
+than left as an absence.
+
+**Found by:** the corrected coverage sweep (HARNESS §4c), not by the original one,
+which globbed only `Features/` and `App/`. This file lives in `Features/`, so it was
+in scope and still slipped — a reminder that the sweep only helps if each unmatched
+name is actually resolved rather than skimmed.
+
+---
+
 _(Add entries as they arise. Cosmetic gaps found in the Phase 8 screenshot pass
 go here too, each with a reason or a fix.)_
