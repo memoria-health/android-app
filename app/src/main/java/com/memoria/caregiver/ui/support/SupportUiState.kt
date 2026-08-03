@@ -3,8 +3,8 @@ package com.memoria.caregiver.ui.support
 import androidx.compose.ui.graphics.ImageBitmap
 
 /**
- * State for the two founder-facing surfaces — the feedback form and the
- * perpetual help button's chat sheet.
+ * State for the three founder-facing surfaces — the feedback form, the perpetual
+ * help button's chat sheet, and the Settings tab's "Contact support" sheet.
  *
  * Same contract as `ui/auth/AuthUiState.kt`: **the screens are pure
  * `@Composable` functions over these types.** No ViewModel, no I/O, no direct
@@ -13,7 +13,8 @@ import androidx.compose.ui.graphics.ImageBitmap
  * hoisted so the host owns the network call.
  *
  * Spec: `Features/Feedback/FeedbackView.swift`,
- * `Features/Support/SupportButton.swift`, PARITY.md §28.
+ * `Features/Support/SupportButton.swift`,
+ * `Features/AppSettings/SupportContactView.swift`, PARITY.md §28.
  */
 
 // ---------------------------------------------------------------------------
@@ -48,6 +49,23 @@ internal fun Char.isSwiftWhitespaceOrNewline(): Boolean =
 /** Swift's `trimmingCharacters(in: .whitespacesAndNewlines)`. */
 internal fun String.trimmingWhitespaceAndNewlines(): String =
     trim { it.isSwiftWhitespaceOrNewline() }
+
+/**
+ * True when [this] is whitespace as Swift's **`CharacterSet.whitespaces`**
+ * defines it: horizontal tab plus Unicode general category `Zs`, and **no
+ * newlines**.
+ *
+ * The narrower of the two sets, and the difference is real rather than
+ * pedantic. `SupportContactView` trims the subject with `.whitespaces` and the
+ * message with `.whitespacesAndNewlines`, so a subject that is a single newline
+ * survives trimming and is posted as "\n". Widening it here would be a quiet
+ * behaviour change on a field the backend puts in an email header.
+ */
+internal fun Char.isSwiftWhitespace(): Boolean =
+    this == '\u0009' || Character.getType(this) == Character.SPACE_SEPARATOR.toInt()
+
+/** Swift's `trimmingCharacters(in: .whitespaces)`. */
+internal fun String.trimmingWhitespace(): String = trim { it.isSwiftWhitespace() }
 
 // ---------------------------------------------------------------------------
 // Feedback
@@ -162,4 +180,56 @@ data class HelpChatState(
     /** `SupportButton.swift:46`. */
     val canSend: Boolean
         get() = trimmedMessage.isNotEmpty() && !isSending && !didSend
+}
+
+// ---------------------------------------------------------------------------
+// Contact support
+// ---------------------------------------------------------------------------
+
+/**
+ * Everything `SupportContactView` holds in `@State`, plus the one flag iOS gets
+ * from the environment instead.
+ *
+ * Unlike the two surfaces above, this one has a producer:
+ * [SupportContactViewModel]. The screen is still pure over this type — the view
+ * model exists because the send has a **timed** tail (the sentence sits on
+ * screen for 800ms before the sheet closes) and a composable is the wrong place
+ * to own a coroutine that outlives a tap.
+ *
+ * @param errorMessage the platform's own sentence, rendered verbatim.
+ *   `SupportContactView.swift:118` assigns `error.localizedDescription` with no
+ *   prefix at all, which is why there is no `…ErrorMessage(description)` helper
+ *   here as there is for feedback.
+ * @param successMessage the backend's echoed `status` string, rendered verbatim.
+ *   It is server copy, not ours — do not substitute a fixed sentence.
+ * @param dismissed the sheet has asked to close: Cancel, or the 800ms after a
+ *   successful send. Carried in the state rather than as a second flow so the
+ *   view model keeps to one `StateFlow`; the host watches it and pops.
+ */
+data class SupportContactState(
+    val subject: String = "",
+    val message: String = "",
+    val isSending: Boolean = false,
+    val errorMessage: String? = null,
+    val successMessage: String? = null,
+    val dismissed: Boolean = false,
+) {
+    /**
+     * `SupportContactView.swift:17`. **`.whitespaces`, not
+     * `.whitespacesAndNewlines`** — see [trimmingWhitespace] for why the
+     * difference is kept.
+     */
+    val trimmedSubject: String
+        get() = subject.trimmingWhitespace()
+
+    /** `SupportContactView.swift:18`. */
+    val trimmedMessage: String
+        get() = message.trimmingWhitespaceAndNewlines()
+
+    /**
+     * `SupportContactView.swift:20-22`. The subject is optional and labelled so;
+     * only the message is required.
+     */
+    val canSend: Boolean
+        get() = trimmedMessage.isNotEmpty() && !isSending
 }

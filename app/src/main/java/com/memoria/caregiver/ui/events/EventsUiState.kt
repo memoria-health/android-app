@@ -1,9 +1,10 @@
 package com.memoria.caregiver.ui.events
 
 import com.memoria.caregiver.data.model.DetectionEvent
+import com.memoria.caregiver.data.model.Detector
 
 /**
- * State the three event screens render from, and the derivations that used to
+ * State the four event screens render from, and the derivations that used to
  * live in the SwiftUI views as computed properties.
  *
  * **The screens are pure `@Composable` functions over these types**, exactly as
@@ -14,7 +15,8 @@ import com.memoria.caregiver.data.model.DetectionEvent
  * the host's job and reaches these screens only as state or as a callback.
  *
  * Spec: `Features/Patient/Events/PatientEventsView.swift`,
- * `EventCard.swift`, `EventDetailView.swift`, and PARITY.md §15.
+ * `EventCard.swift`, `EventDetailView.swift`, `EventReviewView.swift`, and
+ * PARITY.md §15.
  */
 
 /**
@@ -165,4 +167,68 @@ internal fun clipPlaceholderLabel(clip: ClipState): String? = when (clip) {
     ClipState.NotReady -> "Clip processing…"
     is ClipState.Failed -> clip.message
     is ClipState.Loaded -> null
+}
+
+/**
+ * Event review, step 2 of 2. iOS: `EventReviewView`'s two `@State` variables
+ * plus the event it was pushed with.
+ *
+ * Hoisted rather than held in a `remember` inside the screen, so the host that
+ * owns the submit also owns what is being submitted. That is not a style
+ * preference here: `EventsListViewModel.submitReview(event, choice, notes)`
+ * takes both as arguments and keeps neither, so somebody above the screen has
+ * to hold them anyway.
+ *
+ * @param choice **defaults to [DetectionEvent.ReviewChoice.CORRECT]**, matching
+ *   `@State private var choice: ReviewChoice = .correct`. The screen therefore
+ *   opens with a row already selected and can always be submitted; there is no
+ *   "nothing chosen" state to guard against.
+ * @param notes free text, untrimmed. `submitReview` sends it as typed — see the
+ *   comment there about iOS not trimming despite the local being named as if it
+ *   did.
+ */
+data class EventReviewState(
+    val event: DetectionEvent,
+    val choice: DetectionEvent.ReviewChoice = DetectionEvent.ReviewChoice.CORRECT,
+    val notes: String = "",
+)
+
+/**
+ * The question at the top of the review screen. iOS:
+ * `EventReviewView.subjectQuestion`.
+ *
+ * The safety branch drops the event title into the sentence lowercased, so
+ * "Possible fall" reads as "Was this a real possible fall?". [String.lowercase]
+ * with no argument is locale-independent, which is what Swift's `lowercased()`
+ * is — the locale-aware overload would turn a Turkish "I" into a dotless "ı"
+ * and make the two platforms disagree.
+ */
+internal fun reviewSubjectQuestion(event: DetectionEvent): String =
+    when (event.category) {
+        Detector.Category.SAFETY -> "Was this a real ${event.title.lowercase()}?"
+        Detector.Category.ROUTINE -> "Was this the right thing to flag?"
+    }
+
+/**
+ * The small grey line under a choice's label. iOS: `EventReviewView.subText`.
+ *
+ * "Not sure" reads the same for both categories — iOS matches it with a
+ * wildcard on the category — while "Correct" and "Not correct" are worded per
+ * category. Carried verbatim: "that's the right thing to flag" and "we
+ * shouldn't have flagged this" are the caregiver's own framing of a routine
+ * event, and a safety event is named rather than described.
+ */
+internal fun reviewChoiceSubtext(
+    event: DetectionEvent,
+    choice: DetectionEvent.ReviewChoice,
+): String = when (choice) {
+    DetectionEvent.ReviewChoice.UNSURE -> "Hard to tell from the clip."
+    DetectionEvent.ReviewChoice.CORRECT -> when (event.category) {
+        Detector.Category.SAFETY -> "Yes, that was a real ${event.title.lowercase()}."
+        Detector.Category.ROUTINE -> "Yes, that's the right thing to flag."
+    }
+    DetectionEvent.ReviewChoice.WRONG -> when (event.category) {
+        Detector.Category.SAFETY -> "It wasn't a ${event.title.lowercase()}."
+        Detector.Category.ROUTINE -> "We shouldn't have flagged this."
+    }
 }

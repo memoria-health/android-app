@@ -70,8 +70,8 @@ problem from F-10:
 |---|---|---|---|
 | `PHeader.swift` | 76 | **FIXED 2026-08-02** | now `ui/patient/PatientHeader.kt` |
 | `PatientDetectorsView.swift` | 156 | **missing** | the Detectors tab's own list. `DetectorRow` and `DetectorDetailSheet` exist; nothing composes them |
-| `EventReviewView.swift` | — | **missing** | review step 2. `EventsListViewModel.submitReview` is written and tested and has no caller |
-| `SupportContactView.swift` | — | **missing** | `SupportUiState` exists, the screen does not |
+| `EventReviewView.swift` | — | **FIXED 2026-08-02** | `ui/events/EventReviewScreen.kt`; `submitReview` finally has a caller |
+| `SupportContactView.swift` | — | **FIXED 2026-08-02** | `ui/support/SupportContactScreen.kt` + its ViewModel |
 | `PrivacyPolicyView.swift` | — | **missing** | no match anywhere |
 
 **Why the phase reviews could not catch this.** Every review checked that what
@@ -346,7 +346,25 @@ lands, not to add a lock now. Belongs with F-10.
 ---
 
 ### F-5 — `EnrollmentCoverageSink` has no implementation, so the camera cannot be built
-**Phase 6 · Important · CONFIRMED and sharpened 2026-08-02**
+**Phase 6 · Important · FIXED 2026-08-02**
+
+`ui/enrollment/FaceCoverageModelSink.kt` joins the two halves. Two signature
+differences, neither losing anything: the model takes a lazy `() -> ByteArray?`
+so it can decline to pay for an encode, but `EnrollmentCamera` has already made
+exactly that decision one step earlier, so wrapping the value re-satisfies the
+shape without encoding twice; and the model's `ingest` return value is discarded
+because the screen renders `model.state`, which already reflects the capture.
+
+The model deliberately still does not declare the interface itself — it lives in
+`data/enrollment/` and its header promises no camera, UI or ML Kit dependency,
+which is what lets it be tested against recorded poses with no Android on the
+path.
+
+Five tests, four mutations, all four caught (see the harness note in
+`HARNESS.md` §4d — the first run of those mutations produced four FALSE
+"survived" results).
+
+**Original entry, for the record:**
 
 More precise than reported. The sink is not "unwired" — `EnrollmentCamera`
 takes one as a constructor parameter and calls it correctly. The problem is that

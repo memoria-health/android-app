@@ -232,6 +232,41 @@ enumerated *files*, and that was the hole.
 
 ---
 
+## 4d. Mutation testing must confirm the test RAN, not just that nothing failed
+
+Added 2026-08-02, after my own mutation harness reported four consecutive
+"SURVIVED" results that were all false.
+
+The script applied a mutation, ran `./gradlew testDebugUnitTest --tests
+'*XTest*'`, grepped for a line ending `FAILED`, and reported "survived" when it
+found none. A concurrent agent had left a **test source file that did not
+compile**, so `compileDebugUnitTestKotlin` failed and *no test ran at all*. No
+test ran, therefore no test failed, therefore every mutation "survived".
+
+**Absence of a failure is not evidence of a pass.** This is the same shape as
+the empty-source-set guard that did not guard (DECISIONS.md D-013's neighbour):
+a gate that reports success when its subject never executed.
+
+**The rule:** a mutation run must assert a POSITIVE signal — the intended test
+executed and failed. In practice:
+
+```bash
+out=$(./gradlew testDebugUnitTest --tests '*XTest*' --console=plain 2>&1)
+echo "$out" | grep -q "TEST SUMMARY" || { echo "HARNESS BROKEN: nothing ran"; exit 1; }
+echo "$out" | grep -q "the intended test name.*FAILED" || echo "SURVIVED"
+```
+
+The `TEST SUMMARY` check is the load-bearing line: this project's
+`verifyUnitTestsRan` finalizer prints it, so its absence means the suite did not
+execute and **the result is void, not green and not red**.
+
+Corollary for parallel work: one agent's broken test file breaks the *module's*
+test compile, so nobody else can run anything. When several agents are active,
+a red or empty run is as likely to be somebody else's half-written file as it is
+to be yours — check `compileDebugUnitTestKotlin` before believing any verdict.
+
+---
+
 ## 5. Escalation — exactly what stops the machine
 
 Aryaman's standing instruction is to surface design choices before implementing.

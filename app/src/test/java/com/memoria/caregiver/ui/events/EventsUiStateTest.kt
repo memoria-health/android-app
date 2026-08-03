@@ -1,5 +1,7 @@
 package com.memoria.caregiver.ui.events
 
+import com.memoria.caregiver.data.model.DetectionEvent
+import com.memoria.caregiver.data.model.Detector
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -111,5 +113,87 @@ class EventsUiStateTest {
     @Test
     fun `a loaded clip has no placeholder`() {
         assertNull(clipPlaceholderLabel(ClipState.Loaded("https://example.test/clip.mp4")))
+    }
+
+    // -----------------------------------------------------------------------
+    // Review copy
+    // -----------------------------------------------------------------------
+
+    private val routine = sampleEvent(
+        title = "Skipped breakfast",
+        category = Detector.Category.ROUTINE,
+    )
+
+    /**
+     * The safety question names the event back to the caregiver, lowercased and
+     * mid-sentence. A title that arrived capitalised must not stay capitalised
+     * in the middle of the question.
+     */
+    @Test
+    fun `a safety review asks about the event by name`() {
+        assertEquals(
+            "Was this a real possible fall?",
+            reviewSubjectQuestion(sampleEvent(title = "Possible fall")),
+        )
+    }
+
+    /**
+     * A routine event is not a claim about something that happened, so its
+     * question is about the flag rather than the event, and the title does not
+     * appear at all.
+     */
+    @Test
+    fun `a routine review asks about the flag, not the event`() {
+        assertEquals("Was this the right thing to flag?", reviewSubjectQuestion(routine))
+    }
+
+    /** The two categories are worded differently on purpose. */
+    @Test
+    fun `the correct and wrong subtitles are per category`() {
+        val safety = sampleEvent(title = "Possible fall")
+        assertEquals(
+            "Yes, that was a real possible fall.",
+            reviewChoiceSubtext(safety, DetectionEvent.ReviewChoice.CORRECT),
+        )
+        assertEquals(
+            "It wasn't a possible fall.",
+            reviewChoiceSubtext(safety, DetectionEvent.ReviewChoice.WRONG),
+        )
+        assertEquals(
+            "Yes, that's the right thing to flag.",
+            reviewChoiceSubtext(routine, DetectionEvent.ReviewChoice.CORRECT),
+        )
+        assertEquals(
+            "We shouldn't have flagged this.",
+            reviewChoiceSubtext(routine, DetectionEvent.ReviewChoice.WRONG),
+        )
+    }
+
+    /**
+     * "Not sure" is about the clip rather than about the detection, so it reads
+     * the same either way — iOS matches it with a wildcard on the category.
+     */
+    @Test
+    fun `not sure reads the same for both categories`() {
+        assertEquals(
+            "Hard to tell from the clip.",
+            reviewChoiceSubtext(sampleEvent(), DetectionEvent.ReviewChoice.UNSURE),
+        )
+        assertEquals(
+            "Hard to tell from the clip.",
+            reviewChoiceSubtext(routine, DetectionEvent.ReviewChoice.UNSURE),
+        )
+    }
+
+    /**
+     * `@State private var choice: ReviewChoice = .correct`. The screen opens
+     * with an answer already selected, so "submit without choosing" is not a
+     * state that can be reached and nothing guards against it.
+     */
+    @Test
+    fun `a review opens on correct with empty notes`() {
+        val state = EventReviewState(event = sampleEvent())
+        assertEquals(DetectionEvent.ReviewChoice.CORRECT, state.choice)
+        assertEquals("", state.notes)
     }
 }

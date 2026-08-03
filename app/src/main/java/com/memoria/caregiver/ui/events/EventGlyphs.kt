@@ -412,6 +412,11 @@ private fun DrawScope.drawGlyph(name: String, tint: Color, stroke: Float) {
         "chevron.backward", "chevron.left" -> poly(0.68f, 0.08f, 0.30f, 0.50f, 0.68f, 0.92f)
         "chevron.right" -> poly(0.32f, 0.08f, 0.70f, 0.50f, 0.32f, 0.92f)
         "checkmark" -> poly(0.12f, 0.55f, 0.38f, 0.82f, 0.88f, 0.20f)
+        // Three dots on the centre line. SF sizes them off the stroke weight, so
+        // they thicken with the symbol's weight rather than staying fixed.
+        "ellipsis" -> for (cx in listOf(0.18f, 0.50f, 0.82f)) {
+            drawCircle(tint, stroke * 0.8f, at(cx, 0.50f))
+        }
         "xmark" -> {
             line(0.16f, 0.16f, 0.84f, 0.84f)
             line(0.84f, 0.16f, 0.16f, 0.84f)
