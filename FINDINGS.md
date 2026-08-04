@@ -33,6 +33,58 @@ into a file — is the finding that matters most here.**
 
 ## OPEN
 
+### F-42 — The privacy notice describes an iOS-only product, and Android now ships it
+**Compliance · Important · OPEN — belongs to whoever owns the policy, not to the port**
+
+Porting `PrivacyPolicyView` (F-14) meant reading all 4,000 words of the notice.
+Six clauses describe an iPhone-only service, and the Android app now renders them
+to its own users:
+
+| § | The notice says | On Android |
+|---|---|---|
+| 2 | "**Service.** Collective term for Memoria's **iOS caregiver app**, MemoriaSensor app, Dashboard…" | the Android app is not part of the defined Service |
+| 3.3 | "**Apple Push Notification** device tokens" | will be FCM tokens (Google), a different processor |
+| 3.3 | "**iOS version** and device model" | Android version and model |
+| 6 | Service Providers list ends at "**Apple Inc.** Operates Apple Push Notification service" | **Google LLC** is not listed as the push processor |
+| 10 | "Secure authentication token storage in **iOS Keychain**" | no Keychain equivalent — see below |
+| 2 | "**Sensor.** Apple iPhone running MemoriaSensor application" | true today; worth confirming it stays true |
+
+**§10 is the one with a code answer as well as a legal one.** Verified in the
+Android source: there is no `EncryptedSharedPreferences`, no `MasterKey` and no
+Keystore usage anywhere. The push token is in plain `SharedPreferences`
+(`SharedPrefsPushTokenStore`), and the Supabase session uses supabase-kt's
+default storage, which this port has not configured and I have not verified.
+App-private `SharedPreferences` is protected by the OS sandbox and is not
+nothing, but it is not what the sentence claims, and the sentence is a security
+representation made to users.
+
+So there are two decisions, and they are different:
+
+1. **Legal:** re-export the notice to cover Android, naming Google LLC as a push
+   processor and describing Android token storage accurately. Both platforms then
+   ship the new text together — the notice is bundled and version-locks with the
+   release, so they must not drift.
+2. **Engineering:** decide whether Android token storage should be brought up to
+   the claim (Keystore-backed `EncryptedSharedPreferences`) rather than the claim
+   brought down to the storage. That is a small change and probably the better
+   direction, but it is a security posture decision, not a port decision.
+
+**Nothing was edited to paper over this.** `PrivacyPolicyContent.kt` carries all
+98 strings byte-for-byte from the Swift, verified by extraction and diff, and a
+SHA-256 digest test locks them. Rewriting a legal notice inside a port would mean
+the two platforms silently promised users different things about the same
+service, with nothing recording which was authoritative.
+
+**A test will tell you when this is fixed.** `PrivacyPolicyContentTest` asserts
+the notice does **not** mention Android. The day it is re-exported, that test
+fails and names this finding.
+
+**Related:** REQ-10/Q4 (the real Veritas documents behind the consent gate are
+still placeholders) and F-17 (the consent record has no version). A re-export is
+the moment to settle all three, since they are the same document family.
+
+---
+
 ### F-41 — The exit-door picker is built and still unreachable; it needs a frame grab
 **Phase 4 · Important · FIXED 2026-08-03**
 
@@ -259,7 +311,10 @@ parity bugs. Undocumented divergence in the one file whose whole premise is
 ---
 
 ### F-14 — Four screen-level ports are missing entirely, not merely unwired
-**All phases · Important · found 2026-08-02 by a completeness sweep**
+**All phases · Important · CLOSED 2026-08-03 — all five rows resolved**
+
+Reading the notice to port the last row produced F-42, which is the more
+important outcome of this finding.
 
 `PHeader` turned out to have never been ported — I only noticed because the
 patient shell could not be built without it. That prompted a name-based sweep of
@@ -270,10 +325,10 @@ problem from F-10:
 | iOS file | Lines | Android | Note |
 |---|---|---|---|
 | `PHeader.swift` | 76 | **FIXED 2026-08-02** | now `ui/patient/PatientHeader.kt` |
-| `PatientDetectorsView.swift` | 156 | **missing** | the Detectors tab's own list. `DetectorRow` and `DetectorDetailSheet` exist; nothing composes them |
+| `PatientDetectorsView.swift` | 156 | **FIXED** | `ui/detectors/PatientDetectorsScreen.kt`, 305 lines, reachable from the Detectors tab. This row was stale — it was built during the detector UX work and the table was never updated |
 | `EventReviewView.swift` | — | **FIXED 2026-08-02** | `ui/events/EventReviewScreen.kt`; `submitReview` finally has a caller |
 | `SupportContactView.swift` | — | **FIXED 2026-08-02** | `ui/support/SupportContactScreen.kt` + its ViewModel |
-| `PrivacyPolicyView.swift` | — | **missing** | no match anywhere |
+| `PrivacyPolicyView.swift` | 280 | **FIXED 2026-08-03** | `ui/settings/PrivacyPolicyScreen.kt` + `PrivacyPolicyContent.kt`; text verified verbatim, 98 strings, and digest-locked |
 
 **Why the phase reviews could not catch this.** Every review checked that what
 was built matched the Swift. None checked the inverse — that everything in the

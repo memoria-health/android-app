@@ -77,6 +77,7 @@ import androidx.compose.material3.ModalBottomSheet
 import com.memoria.caregiver.ui.settings.DataCollectionConsentSheet
 import com.memoria.caregiver.ui.settings.patientDisplayName
 import com.memoria.caregiver.ui.settings.PatientSettingsScreen
+import com.memoria.caregiver.ui.settings.PrivacyPolicyScreen
 import com.memoria.caregiver.ui.support.SupportContactScreen
 import com.memoria.caregiver.ui.support.SupportContactViewModel
 import com.memoria.caregiver.ui.settings.PatientSettingsViewModel
@@ -265,22 +266,7 @@ class MainActivity : ComponentActivity() {
                                     )
                                 }
                                 if (showPrivacy) ModalOverlay(screen = "privacy_policy") {
-                                    // The one row in this task with nothing to
-                                    // reach. iOS's `PrivacyPolicyView` is 280
-                                    // lines of bundled policy text and has no
-                                    // Android port at all — FINDINGS.md F-14
-                                    // lists it as missing, not as unwired. The
-                                    // text is a legal artefact and inventing an
-                                    // Android copy of it would be worse than
-                                    // saying it is not here yet.
-                                    NotBuiltScreen(
-                                        title = "Privacy & data",
-                                        reason = "The privacy notice has not been " +
-                                            "brought across to Android yet. It is " +
-                                            "available in full at " +
-                                            "dashboard.nemara-health.com/privacy.",
-                                        onBack = { showPrivacy = false },
-                                    )
+                                    PrivacyPolicyScreen(onDone = { showPrivacy = false })
                                 }
                                 if (showSupport) ModalOverlay(screen = "support_contact") { ScopedViewModelStore("support") {
                                     // Scoped, so closing the sheet CLEARS the
