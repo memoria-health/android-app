@@ -110,7 +110,10 @@ data class Patient(
     @SerialName("last_event_at")
     @Serializable(with = NemaraInstantSerializer::class)
     val lastEventAt: Instant? = null,
-    @SerialName("cameras_paused") val camerasPaused: Boolean,
+    // Post-launch column. The default is the behaviour that was in force before
+    // it existed — monitoring live — so an app build running against an older
+    // backend still decodes. See the note on tolerant decoding below.
+    @SerialName("cameras_paused") val camerasPaused: Boolean = false,
     /**
      * Facilities audio kill: false = the patient's cameras never publish an
      * audio track (no live sound, no audio in clips, no speech alerts).
@@ -122,19 +125,21 @@ data class Patient(
      * backend fans alerts to the owning caregiver's account email plus every
      * address in [emailAlertRecipients].
      */
-    @SerialName("email_alerts_enabled") val emailAlertsEnabled: Boolean,
+    @SerialName("email_alerts_enabled") val emailAlertsEnabled: Boolean = false,
     /**
      * Additional email addresses (beyond the caregiver's account email) to copy
      * on this patient's alerts. Server replaces the full array on every PATCH,
      * so clients send the whole list.
      */
-    @SerialName("email_alert_recipients") val emailAlertRecipients: List<String>,
+    @SerialName("email_alert_recipients") val emailAlertRecipients: List<String> = emptyList(),
     /**
      * Per-patient opt-in for contributing short video/audio clips to Memoria's
      * research dataset (only captured when someone is present). Default false;
      * flipped by the first-open consent sheet and the Settings card.
      */
-    @SerialName("data_collection_enabled") val dataCollectionEnabled: Boolean,
+    // Absent consent must never read as consent given, so the default is false
+    // rather than "whatever the server would have said".
+    @SerialName("data_collection_enabled") val dataCollectionEnabled: Boolean = false,
     /**
      * When the caregiver first made a data-collection decision (Share or Not
      * now). Null means never asked, so show the first-open consent sheet.

@@ -33,6 +33,47 @@ into a file — is the finding that matters most here.**
 
 ## OPEN
 
+### F-43 — Android had iOS's sign-in-killing decode bug, on six columns
+**Data · Critical · FIXED 2026-08-03**
+
+Found by reading the iOS drift rather than by a failure, because nothing on this
+machine could have produced it: the local stack is the *newest* backend, and this
+only bites against an older one — which is what **prod** is.
+
+`bootstrap()` loads patients and detectors, and `bootstrap()` runs inside
+sign-in. So one column the server does not send does not break a screen, it
+breaks **login**, for every user, with a decode error and nowhere to go. iOS
+shipped exactly this twice and fixed it twice (`0d68af6` for Detector,
+`954dd14` for Patient).
+
+Android had it on six fields, all declared without defaults and therefore
+required by kotlinx-serialization:
+
+| Model | Field | Default now | Why that default |
+|---|---|---|---|
+| Patient | `cameras_paused` | `false` | monitoring live — the pre-column behaviour |
+| Patient | `email_alerts_enabled` | `false` | no fan-out |
+| Patient | `email_alert_recipients` | `[]` | nobody copied |
+| Patient | `data_collection_enabled` | `false` | **absent consent must never read as consent** |
+| Detector | `alert_trigger` | `LEADING` | pre-column semantics |
+| Detector | `is_sustained` | `false` | pre-column semantics |
+
+`alert_trigger` and `is_sustained` exist **only** on the
+gateway-camera-ownership backend. Against prod they are simply absent.
+
+**The rule, carried from iOS rather than invented:** columns that have existed
+since launch stay required — without `preferred_name` the payload is not a
+patient, and defaulting it would put an empty name on a card instead of surfacing
+a broken response. Everything added since falls back to its pre-column default.
+`BackendSkewDecodeTest` asserts both halves, including that making a field
+optional did not make it ignored.
+
+**Failure guarded:** a defect that is invisible on the development machine by
+construction. The local stack is always the newest backend, so no amount of
+local testing reaches this — only reading the other platform's fixes did.
+
+---
+
 ### F-42 — The privacy notice describes an iOS-only product, and Android now ships it
 **Compliance · Important · OPEN — belongs to whoever owns the policy, not to the port**
 

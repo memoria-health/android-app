@@ -550,8 +550,13 @@ data class Detector(
     val category: Category,
     val source: Source,
     /** The trigger, the internal temporal nature, and the duration bar. */
-    @SerialName("alert_trigger") val alertTrigger: AlertTrigger,
-    @SerialName("is_sustained") val isSustained: Boolean,
+    // `alert_trigger` and `is_sustained` exist only on the
+    // gateway-camera-ownership backend. Against prod or an older local stack
+    // they are simply absent, and without a default kotlinx-serialization
+    // treats them as required and throws — inside sign-in. Defaults are the
+    // pre-column semantics: leading edge, not sustained.
+    @SerialName("alert_trigger") val alertTrigger: AlertTrigger = AlertTrigger.LEADING,
+    @SerialName("is_sustained") val isSustained: Boolean = false,
     @SerialName("duration_seconds") val durationSeconds: Int? = null,
     /**
      * Rooms the detector is scoped to (multi-select). Null means every room.
@@ -969,7 +974,7 @@ data class DetectorPlan(
 @Serializable
 data class InferDetectorResponse(
     @SerialName("alert_trigger") val alertTrigger: Detector.AlertTrigger,
-    @SerialName("is_sustained") val isSustained: Boolean,
+    @SerialName("is_sustained") val isSustained: Boolean = false,
     @SerialName("duration_seconds") val durationSeconds: Int? = null,
     val category: Detector.Category,
     @SerialName("icon_name") val iconName: String,
