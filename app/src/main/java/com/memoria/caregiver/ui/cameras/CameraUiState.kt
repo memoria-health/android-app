@@ -85,9 +85,19 @@ data class CameraDetailState(
     /**
      * Exit doors are per sensor, and the picker needs a LiveKit identity to pull
      * a frame from, so an unclaimed row cannot configure them.
+     *
+     * Also gated on the wandering detector actually **watching this room**: a
+     * living-room sensor should not carry a doors section when wandering only
+     * watches the hallway. See [wanderingWatchesRoom].
      */
     val showsExitDoors: Boolean
-        get() = wanderingDetector?.isOn == true && camera?.livekitIdentity != null
+        get() {
+            val wandering = wanderingDetector ?: return false
+            if (!wandering.isOn) return false
+            val cam = camera ?: return false
+            if (cam.livekitIdentity == null) return false
+            return wanderingWatchesRoom(cam.room, wandering)
+        }
 
     /**
      * Pairing code is a wall-phone concept. Sensor (Pi) cameras get their
@@ -258,4 +268,33 @@ internal fun cameraRowBadges(camera: Camera): List<CameraRowBadge> {
     if (camera.disabled) badges += CameraRowBadge.HIDDEN
     if (camera.aiPaused) badges += CameraRowBadge.AI_PAUSED
     return badges
+}
+
+/**
+ * Whether the wandering detector watches [room].
+ *
+ * Port of `CameraDetailView.wanderingWatches(room:detector:)` **as it stands on
+ * iOS `main`**, not as the commit that introduced it was written.
+ *
+ * **Case-insensitive, and that is the bug it was written for.** The backend
+ * stores room names in capitals ("HALLWAY"), so comparing them as typed showed
+ * the exit-doors section on the wrong cameras.
+ *
+ * The intermediate iOS commit (`6065961`) also fell back to a `whereScope`
+ * string. That fallback is **deliberately not ported**: `where_scope` was
+ * deleted from the wire on 2026-07-28, `DetectorResponse` no longer carries it,
+ * and `954dd14` removed the references a merge had reintroduced. Porting it
+ * here would have added a read of a field that does not arrive, on the strength
+ * of a commit that had already been superseded.
+ *
+ * Empty, or an explicit "ALL ROOMS" / "ALL", means every camera — the
+ * pre-feature behaviour, and the right default for a safety detector: scoping
+ * too widely shows an extra settings section, scoping too narrowly silently
+ * stops watching a door.
+ */
+internal fun wanderingWatchesRoom(room: String, detector: Detector): Boolean {
+    val rooms = detector.whereRooms.orEmpty().map { it.uppercase(Locale.ROOT) }
+    if (rooms.isEmpty()) return true
+    if (rooms.contains("ALL ROOMS") || rooms.contains("ALL")) return true
+    return rooms.contains(room.uppercase(Locale.ROOT))
 }

@@ -230,6 +230,19 @@ fun AddCameraHost(
             // iOS guards on the same trimmed value the button is disabled by, so
             // a room of spaces is neither submittable nor sent.
             if (!state.canGenerate) return@AddCameraScreen
+            // Before the request, not after: a duplicate name is the
+            // caregiver's to fix, and minting a pairing code for a camera that
+            // should not exist would leave a half-made row behind when they
+            // corrected it. See duplicateRoomMessage for why names must be
+            // unique.
+            val duplicate = duplicateRoomMessage(
+                room = state.room,
+                existing = camerasByPatient[patientId].orEmpty(),
+            )
+            if (duplicate != null) {
+                state = state.copy(phase = PhonePairingPhase.Error(duplicate))
+                return@AddCameraScreen
+            }
             state = state.copy(phase = PhonePairingPhase.Generating)
             scope.launch {
                 // Snapshotted before the request: the room field is still live

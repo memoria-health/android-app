@@ -26,14 +26,21 @@ decodes through them.
 | # | Item | iOS commit | Size | Status |
 |---|---|---|---|---|
 | A1 | **Tolerant decode: Patient, Detector** — required fields that a slightly older backend does not send kill **sign-in**, not one screen | `954dd14`, `0d68af6` | S | **DONE** — F-43, 8 tests |
-| A2 | Sign-in no longer blocks on Realtime channel subscribes | `7842202` | S | **IN PROGRESS** |
+| A2 | Sign-in no longer blocks on Realtime channel subscribes | `7842202` | S | **ALREADY DONE** — verified: `openChannelsDetached()` is `scope.launch`, poll starts alongside, and the comment cites the same 2026-07-28 incident |
 | A3 | `NemaraAPIClient` +93 — home-briefing / home-report / presence endpoints | `5a11ae7`, `cac2833`, `9ce516a` | M | not started |
-| A4 | Wandering `whereRooms`: the detector picks which cameras it watches | `41a7efa` | M | not started |
-| A5 | Exit-door setup appears **only** on cameras the wandering detector watches | `e95c19f` | S | not started |
-| A6 | Wandering room match case-insensitive + `whereScope` fallback; duplicate room names blocked at creation | `6065961` | S | not started |
+| A4 | Wandering `whereRooms`: the detector picks which cameras it watches (the sheet that SETS the rooms) | `41a7efa` | M | **IN PROGRESS** |
+| A5 | Exit-door setup appears **only** on cameras the wandering detector watches | `e95c19f` | S | **DONE** — 9 tests |
+| A6 | Wandering room match case-insensitive; duplicate room names blocked at creation | `6065961` | S | **DONE** — 8 tests. `whereScope` fallback deliberately NOT ported, see below |
 | A7 | **`HomeStatusView` (+347)** — AI briefing, per-person verdict fold, triage-sorted roster, streaks, 3-mode presence | `5a11ae7` … `c934fcd` | **L** | not started |
 | A8 | Events: 12-hour AM/PM times, weekday dropped, SAFETY/ROUTINE/CUSTOM pills removed | `9d12c07`, `daf1063` | S | not started |
 | A9 | Declutter passes 1–3: `InfoDot` component, eyebrows and captions removed across sensors / events / settings | `18123ac`, `07c901b`, `d031a09`, `566153c` | M | not started |
+
+**Port the final state, not the commit series.** `6065961` added a `whereScope`
+fallback to the room match; `954dd14` then removed `whereScope` entirely, and
+`DetectorResponse` on the backend does not carry it. Porting commit-by-commit
+would have added a read of a field that never arrives. Checked the backend
+schema rather than trusting the commit — worth repeating for A7, which spans a
+dozen commits that revise each other.
 
 **A1 is not a port, it is a live defect on Android.** Verified in
 `PatientModels.kt` and `DeviceModels.kt`: `camerasPaused`, `emailAlertsEnabled`,

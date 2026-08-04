@@ -3,6 +3,7 @@
 package com.memoria.caregiver.ui.cameras
 
 import androidx.compose.runtime.Composable
+import com.memoria.caregiver.data.model.Camera
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -241,3 +242,37 @@ internal val PairingCodeTextStyle = TextStyle(
 
 /** iOS: `.tracking(8)` on the code, on both sheets. */
 internal val PairingCodeTracking = 8.sp
+
+/**
+ * The error to show when [room] duplicates a camera this patient already has,
+ * or null when the name is free.
+ *
+ * Port of the guard added to `AddCameraSheet.generate()` (iOS `6065961`).
+ *
+ * **Room names have to be unique per patient because they are used as keys.**
+ * Wandering scopes itself by room name, the Home report groups by it, and the
+ * camera info panel counts by it — two cameras called "Hallway" make every one
+ * of those ambiguous, and the ambiguity shows up later as a feature quietly
+ * doing the wrong thing rather than as an error here.
+ *
+ * Compared case-insensitively for the same reason [wanderingWatchesRoom] is:
+ * "Hallway" and "HALLWAY" are the same room to everything downstream.
+ *
+ * Hidden (`disabled`) cameras do not reserve their name. The caregiver has
+ * already removed them from view, and refusing a name on account of a row they
+ * cannot see would be unexplainable.
+ */
+internal fun duplicateRoomMessage(room: String, existing: List<Camera>): String? {
+    val trimmed = room.trim()
+    if (trimmed.isEmpty()) return null
+    val taken = existing.any {
+        !it.disabled && it.room.trim().equals(trimmed, ignoreCase = true)
+    }
+    // Curly quotes, as the Swift has them.
+    return if (taken) {
+        "A camera named \u201C$trimmed\u201D already exists for this patient. " +
+            "Pick a different name."
+    } else {
+        null
+    }
+}

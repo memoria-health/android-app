@@ -57,6 +57,8 @@ internal fun testDetector(
     identifier: String? = "fall",
     isOn: Boolean = true,
     iconName: String = "figure.fall",
+    /** Rooms the detector is scoped to. Null means every room. */
+    whereRooms: List<String>? = null,
 ): Detector = Detector(
     id = id,
     patientId = "pat-1",
@@ -70,6 +72,7 @@ internal fun testDetector(
     whenScope = "ALWAYS",
     sensitivity = Detector.Sensitivity.STANDARD,
     isOn = isOn,
+    whereRooms = whereRooms,
     identifier = identifier,
     // Required on the model; a fixed instant so nothing in these tests depends
     // on the wall clock.
