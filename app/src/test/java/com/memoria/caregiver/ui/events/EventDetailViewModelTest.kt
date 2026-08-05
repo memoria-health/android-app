@@ -300,6 +300,19 @@ class EventDetailViewModelTest {
         backend.patchResponse = eventJson(reviewed = true)
         backend.api.updateEvent("e1", UpdateEventRequest(reviewed = true))
 
+        // `runCurrent()` before reading `state.value`, as every other test in
+        // this file does.
+        //
+        // The PATCH suspends, and Ktor's MockEngine really does resume it on
+        // another thread. `state` is a `stateIn` share whose collector runs on
+        // Main, so the emission is QUEUED on the test scheduler rather than
+        // applied inline — and without draining it, `state.value` is read one
+        // update behind the cache it is derived from. Intermittently, because
+        // it depends on whether the background thread happened to win.
+        //
+        // This assertion was the only one here missing the drain. F-36.
+        runCurrent()
+
         assertTrue(vm.state.value.event.reviewed)
     }
 

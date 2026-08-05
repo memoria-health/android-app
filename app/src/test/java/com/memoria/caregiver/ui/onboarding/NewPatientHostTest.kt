@@ -1,5 +1,6 @@
 package com.memoria.caregiver.ui.onboarding
 
+import com.memoria.caregiver.awaitText
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
@@ -136,7 +137,10 @@ class NewPatientHostTest {
         setUp(backend)
 
         compose.onNodeWithText("Add patient").performClick()
-        compose.waitForIdle()
+        // Wait for the screen the create leads to, rather than for the frame
+        // after the click — the request has to have finished for either the
+        // route list or the next step to be true.
+        compose.awaitText("Skip")
 
         assertTrue(backend.seen.contains("POST /v1/patients"))
         // Step 1 of the flow is the detector library, which is what proves the
@@ -161,11 +165,14 @@ class NewPatientHostTest {
         setUp(backend)
 
         compose.onNodeWithText("Add patient").performClick()
-        compose.waitForIdle()
 
         // Inline and verbatim, because the caregiver has to know the patient was
         // NOT created — the one thing a silent failure here would hide.
-        compose.onNodeWithText("Couldn't add that patient.").assertIsDisplayed()
+        //
+        // awaitText, not waitForIdle-then-assert: the message appears only once
+        // the failed POST returns, and waitForIdle settles composition without
+        // waiting for a suspended request. This was the F-36 flake.
+        compose.awaitText("Couldn't add that patient.").assertIsDisplayed()
     }
 
     @Test
@@ -189,10 +196,12 @@ class NewPatientHostTest {
         setUp(backend, onDismiss = { dismissals++ })
 
         compose.onNodeWithText("Add patient").performClick()
-        compose.waitForIdle()
-        compose.onNodeWithText("Skip").performClick()
-        compose.waitForIdle()
-        compose.onNodeWithText("Would you like to add facial detection?").assertIsDisplayed()
+        // "Skip" belongs to the library step, which only exists once the create
+        // POST has returned. Clicking it after a bare waitForIdle is the same
+        // race as the assertion below — it just fails as "node not found"
+        // rather than as a wrong value.
+        compose.awaitText("Skip").performClick()
+        compose.awaitText("Would you like to add facial detection?").assertIsDisplayed()
 
         compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
 

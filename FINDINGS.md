@@ -597,7 +597,54 @@ events, patient sensors.
 ---
 
 ### F-36 — Two host tests are flaky, independent of any recent change
-**Integration · Minor · OPEN**
+**Integration · Minor · FIXED 2026-08-05 — cause found, not worked around**
+
+**The cause.** `waitForIdle()` waits for composition and layout to settle. It
+does **not** wait for a coroutine suspended on an HTTP call, and Ktor's
+`MockEngine` genuinely resumes on another thread. So:
+
+```kotlin
+compose.onNodeWithText("Add patient").performClick()
+compose.waitForIdle()
+compose.onNodeWithText("Couldn't add that patient.").assertIsDisplayed()
+```
+
+is a race between the request finishing and the next frame being drawn.
+
+**Proved by A/B rather than asserted.** With `waitForIdle`, the test failed
+**1 run in 10**. With the fix, **10 of 10** passed — and because ten clean runs
+happen by chance about 11% of the time at that failure rate, the old code was
+put back and re-run to confirm it still failed. It did.
+
+**The fix** is `ComposeWaits.awaitText`, which polls the semantics tree until
+the text appears — the question these tests were actually asking. It reports
+what it waited for on timeout, because `waitUntil`'s own message ("condition
+never became true") is not actionable in a suite this size.
+
+**Two sites per test, not one.** The second was `onNodeWithText("Skip")
+.performClick()` — clicking a node that only exists once the create returns. The
+same race, failing as "node not found" rather than as a wrong value, which is
+why it read as a different problem.
+
+**The third instance had a different cause with the same shape.**
+`EventDetailViewModelTest` was missing a `runCurrent()` before reading
+`state.value` — every other test in that file had one. The `stateIn` share
+resumes on Main, so the emission is queued on the test scheduler; without
+draining it, the read is one update behind the cache it derives from.
+
+**Left alone deliberately:** `ThemeTest` and `FontTest` still use
+`waitForIdle`, and should. They assert on composition alone, with no request in
+flight, which is exactly what it is for.
+
+**Verified:** 5 consecutive full-suite runs, 2177/2177 each.
+
+**Failure guarded:** a suite that fails at random teaches people to re-run
+instead of read — which is exactly what happened here twice, once costing the
+identity of the failing test.
+
+**The original finding follows.**
+
+---
 
 Full runs intermittently fail one of `NewPatientHostTest` / `AuthNavHostTest`;
 each passes in isolation. Confirmed pre-existing: reverting the recent

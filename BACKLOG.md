@@ -95,7 +95,7 @@ actually arriving needs REQ-2 or REQ-13.
 |---|---|---|
 | D1 | Duplicate status bar at the bottom of the support screen; cause not identified | F-20 |
 | D2 | Storage URLs cannot serve emulator and real device from one value (environment, not an app defect) | F-21 |
-| D3 | Three flaky tests, all host/ViewModel + MockEngine + assert-on-state. Pattern now named; fix is one shared settle() discipline | F-36 |
+| D3 | ~~Three flaky tests~~ **FIXED** — cause was `waitForIdle` not awaiting a suspended request; proved by A/B (1-in-10 before, 10/10 after, old code re-run to confirm). 5 clean full-suite runs | F-36 |
 | D4 | Five parity screens still uncompared — captures are on disk | — |
 
 ---

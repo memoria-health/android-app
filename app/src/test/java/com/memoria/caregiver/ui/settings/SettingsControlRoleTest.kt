@@ -53,6 +53,12 @@ class SettingsControlRoleTest {
                         onPeopleBlurChange = {},
                         onAudioCaptureChange = {},
                         onDataCollectionChange = {},
+                        // Added by 5875c3c (Evaluation mode). That commit says
+                        // "NOT COMPILED" in its own message — the machine it was
+                        // written on had no JVM 17 — so the two test call sites
+                        // were never updated and the test source stopped
+                        // building.
+                        onEvaluationModeChange = {},
                         onOpenFeedback = {},
                         onRemovePatient = {},
                     )
