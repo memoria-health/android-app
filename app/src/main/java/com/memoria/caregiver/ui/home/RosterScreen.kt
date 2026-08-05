@@ -155,6 +155,10 @@ fun RosterScreen(
                 },
             )
 
+            // The answer before the navigation: one verdict across everyone,
+            // then the list. iOS puts HomeStatusView here for the same reason.
+            HomeStatusSection(state = state)
+
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -162,6 +166,10 @@ fun RosterScreen(
                     .padding(bottom = Spacing.md),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
+                // Already in triage order — whoever needs eyes floats to the
+                // top. The ordering comes from the per-person statuses the
+                // verdict is built from, so the list and the headline can never
+                // disagree about who needs attention.
                 for (patient in state.patients) {
                     PatientRow(
                         patient = patient,
@@ -182,7 +190,7 @@ fun RosterScreen(
  * which every button on this screen uses. Same helper LoginScreen.kt defines.
  */
 @Composable
-private fun Modifier.plainClickable(onClick: () -> Unit): Modifier {
+internal fun Modifier.plainClickable(onClick: () -> Unit): Modifier {
     val interactionSource = remember { MutableInteractionSource() }
     return this.clickable(
         interactionSource = interactionSource,

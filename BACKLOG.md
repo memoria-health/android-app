@@ -31,9 +31,18 @@ decodes through them.
 | A4 | Wandering `whereRooms`: the detector picks which cameras it watches (the sheet that SETS the rooms) | `41a7efa` | M | **DONE** — 6 tests |
 | A5 | Exit-door setup appears **only** on cameras the wandering detector watches | `e95c19f` | S | **DONE** — 9 tests |
 | A6 | Wandering room match case-insensitive; duplicate room names blocked at creation | `6065961` | S | **DONE** — 8 tests. `whereScope` fallback deliberately NOT ported, see below |
-| A7 | **`HomeStatusView` (+347)** — AI briefing, per-person verdict fold, triage-sorted roster, streaks, 3-mode presence | `5a11ae7` … `c934fcd` | **L** | **logic DONE** (`ui/home/HomeStatus.kt`, 26 tests, mutation-checked); the screen itself is next. **Diff pin→HEAD, do not walk the commits**: this span rewrites itself repeatedly (`1454ed8` removed Recent Moments, `fa1c7af`/`e081e46` reworked the blind card, `86d43bc`/`c617ef4`/`7003a95` each restyled the previous one). Walking it would mean building four designs that were discarded. |
+| A7 | **`HomeStatusView` (+347)** — AI briefing, per-person verdict fold, triage-sorted roster, streaks | `5a11ae7` … `c934fcd` | **L** | **DONE** — logic (26 tests, mutation-checked) + screen + state (12 tests). **One piece deliberately deferred: the 3-mode presence suffix** — `lastPresence` is ported and unused, see below. **Diff pin→HEAD, do not walk the commits**: this span rewrites itself repeatedly (`1454ed8` removed Recent Moments, `fa1c7af`/`e081e46` reworked the blind card, `86d43bc`/`c617ef4`/`7003a95` each restyled the previous one). Walking it would mean building four designs that were discarded. |
 | A8 | Events: 12-hour AM/PM times, weekday dropped, SAFETY/ROUTINE/CUSTOM pills removed | `9d12c07`, `daf1063` | S | not started |
 | A9 | Declutter passes 1–3: `InfoDot` component, eyebrows and captions removed across sensors / events / settings | `18123ac`, `07c901b`, `d031a09`, `566153c` | M | not started |
+
+**A7's one gap: the presence suffix.** iOS appends a clause to each quiet
+person's fact line — "camera is on but AI is paused", "no one in view for about
+20 minutes" — built from `GET /last-presence`. The endpoint and its model are
+ported (`HomeApi.lastPresence`) and nothing calls them yet. It is one `n+1` call
+per patient on a screen that already answers its question without it, and it
+only affects the wording sent to the model, never the verdict. Worth doing;
+worth doing after the rest of the re-sync rather than adding a per-patient
+network call to the first screen after sign-in without a device to measure it on.
 
 **Port the final state, not the commit series.** `6065961` added a `whereScope`
 fallback to the room match; `954dd14` then removed `whereScope` entirely, and

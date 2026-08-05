@@ -4,7 +4,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.memoria.caregiver.data.auth.SupabaseAuthService
 import com.memoria.caregiver.data.model.Caregiver
+import com.memoria.caregiver.data.remote.HomeReport
 import com.memoria.caregiver.data.remote.NemaraApiClient
+import java.time.LocalDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -36,7 +40,18 @@ class RosterViewModel(
      * constructor below is the one the app calls.
      */
     caregiver: StateFlow<Caregiver?>,
+    /**
+     * Wall clock, injectable so the whole verdict — which is built from time
+     * windows — is testable without waiting for one.
+     */
+    private val now: () -> Long = { System.currentTimeMillis() },
 ) : ViewModel() {
+
+    /** The caregiver's own zone and local time; the model writes "this morning". */
+    private fun timeZoneId(): String = ZoneId.systemDefault().id
+
+    private fun localTimeLabel(): String =
+        LocalDateTime.now().format(DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy 'at' h:mm a"))
 
     constructor(api: NemaraApiClient, auth: SupabaseAuthService) :
         this(api, auth.currentCaregiver)
@@ -48,17 +63,33 @@ class RosterViewModel(
      */
     private val _isRefreshing = MutableStateFlow(false)
 
+    private val _report = MutableStateFlow<HomeReport?>(null)
+    private val _briefing = MutableStateFlow<String?>(null)
+
     val state: StateFlow<RosterState> = combine(
-        api.patientsFlow,
-        api.eventsByPatientFlow,
+        combine(api.patientsFlow, api.eventsByPatientFlow, api.camerasByPatientFlow) { p, e, c ->
+            Triple(p, e, c)
+        },
         caregiver,
         _isRefreshing,
-    ) { patients, eventsByPatient, me, isRefreshing ->
+        _report,
+        _briefing,
+    ) { data, me, isRefreshing, report, briefing ->
+        val (patients, eventsByPatient, camerasByPatient) = data
+        val statuses = HomeStatus.statuses(patients, eventsByPatient, camerasByPatient, now())
         RosterState(
-            patients = patients,
+            // Triage order: whoever needs eyes floats to the top. The statuses
+            // are already sorted worst-first, so the roster reuses that ordering
+            // rather than ranking `Patient.state` separately — one definition of
+            // "who needs attention", not two that can disagree.
+            patients = statuses.map { it.patient },
             caregiverDisplayName = me?.displayName,
             eventsByPatient = eventsByPatient,
             isRefreshing = isRefreshing,
+            camerasByPatient = camerasByPatient,
+            statuses = statuses,
+            report = report,
+            briefing = briefing,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -76,6 +107,42 @@ class RosterViewModel(
     // why RosterState has no loading field. A caregiver whose roster is still
     // loading sees the empty state for that moment on iOS, and sees it here.
     // Gating the empty state on loading would be a new behaviour, not a fix.
+
+    /**
+     * Fetch the AI summary for the facts as they stand now.
+     *
+     * **Every failure here is silent, and that is the contract rather than a
+     * shortcut.** The backend's own docstring for `/v1/home-briefing` says a
+     * client must treat any failure as "use the local template sentence", and
+     * the screen already has that sentence computed locally. An error banner
+     * over a working summary would be noise about a service the caregiver
+     * cannot act on.
+     *
+     * The report is tried first because it is the single author for the whole
+     * summary — highlight and description together. Only if it has nothing to
+     * say does the older facts-proxy run, which is also the path an older
+     * backend takes, since it may not have the report endpoint at all.
+     */
+    fun refreshBriefing() {
+        val snapshot = state.value
+        if (snapshot.statuses.isEmpty()) return
+        viewModelScope.launch {
+            val report = runCatching { api.home.homeReport(timeZoneId(), localTimeLabel()) }
+                .getOrNull()
+                ?.takeIf { it.highlight.isNotEmpty() }
+            if (report != null) {
+                _report.value = report
+                return@launch
+            }
+            // Older backend, or a report the model declined to write. Fall back
+            // to sending the facts this device already computed.
+            val facts = snapshot.statuses.associate { it.name to it.factLine }
+            val text = runCatching {
+                api.home.homeBriefing(HomeStatus.briefingName(snapshot.statuses), facts)
+            }.getOrNull()
+            if (!text.isNullOrEmpty()) _briefing.value = text
+        }
+    }
 
     /**
      * Pull-to-refresh: the roster plus every per-patient sub-collection.

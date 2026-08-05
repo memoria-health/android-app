@@ -1,6 +1,8 @@
 package com.memoria.caregiver.ui.home
 
+import com.memoria.caregiver.data.model.Camera
 import com.memoria.caregiver.data.model.DetectionEvent
+import com.memoria.caregiver.data.remote.HomeReport
 import com.memoria.caregiver.data.model.Detector
 import com.memoria.caregiver.data.model.Patient
 
@@ -42,7 +44,71 @@ data class RosterState(
     val caregiverDisplayName: String? = null,
     val eventsByPatient: Map<String, List<DetectionEvent>> = emptyMap(),
     val isRefreshing: Boolean = false,
-)
+    /** Needed by the Home verdict: blindness is a camera fact, not an event one. */
+    val camerasByPatient: Map<String, List<Camera>> = emptyMap(),
+    /** Per-person statuses, worst first. Also the roster's triage order. */
+    val statuses: List<HomeStatus.PersonStatus> = emptyList(),
+    /** The server's LLM-authored summary, when it answered. */
+    val report: HomeReport? = null,
+    /** The server's fact-proxy sentence, when the report did not answer. */
+    val briefing: String? = null,
+) {
+    /**
+     * The headline. The server's report **replaces** the locally-computed
+     * verdict when it arrives, because it is the one author for the whole
+     * summary — two authors produce a highlight and a sub-line that disagree.
+     */
+    val verdict: HomeStatus.Verdict
+        get() {
+            val local = HomeStatus.verdict(statuses)
+            val rep = report ?: return local
+            if (rep.highlight.isEmpty()) return local
+            val level = when (rep.severity) {
+                "urgent" -> HomeStatus.Level.URGENT
+                "warn" -> HomeStatus.Level.ATTENTION
+                else -> HomeStatus.Level.QUIET
+            }
+            return HomeStatus.Verdict(level = level, line = rep.highlight, sub = "")
+        }
+
+    /**
+     * The prose under the headline: server report, else server briefing, else
+     * the sentence computed on this device.
+     *
+     * Three levels because all three sources are allowed to be missing — the
+     * backend's own docstring says a client must treat a briefing failure as
+     * "use the local template sentence" — and because the local one is
+     * available instantly, so the screen is never empty while a call is out.
+     */
+    val briefingText: String
+        get() = report?.description?.takeIf { it.isNotEmpty() }
+            ?: briefing?.takeIf { it.isNotEmpty() }
+            ?: HomeStatus.templateBriefing(statuses)
+
+    /**
+     * Streak chips render only for a single patient. Across several people the
+     * numbers are ambiguous — "12 days" silently mixing two patients is worse
+     * than no chip — so multi-patient numbers live on each person's own page.
+     */
+    val streak: Pair<String, String>?
+        get() {
+            if (statuses.size != 1) return null
+            val days = statuses.first().daysWithoutFall ?: return null
+            return days to if (days == "1") "day since a fall" else "days without a fall"
+        }
+
+    /** Exact per-person camera truth, for the ⓘ expansion. */
+    val cameraDetail: List<Pair<String, String>>
+        get() = HomeStatus.cameraDetail(patients, camerasByPatient)
+
+    /**
+     * What the briefing narrates. Watched so a refetch happens whenever any
+     * person's reality changes — a camera flipping online, a new event — because
+     * a briefing must never outlive the facts it describes.
+     */
+    val factSignature: String
+        get() = statuses.joinToString("|") { it.factLine }
+}
 
 /**
  * Shown when the caregiver record has no usable name.

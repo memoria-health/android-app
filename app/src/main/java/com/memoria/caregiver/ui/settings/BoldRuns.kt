@@ -26,15 +26,23 @@ private const val MARKER = "**"
 /**
  * Split [source] into plain text plus the ranges that were wrapped in `**`.
  *
- * An unmatched marker is left alone and rendered literally: this text is a legal
- * notice, and silently dropping characters from one because a typo confused a
- * parser is worse than showing two asterisks. iOS behaves the same way —
- * `AttributedString(markdown:)` fails and the `??` falls back to the raw string.
- *
  * Empty spans (`****`) produce no range rather than an empty one, since an empty
  * bold range styles nothing and only complicates the caller.
+ *
+ * @param keepUnmatchedMarkers what to do with a `**` that has no partner, and
+ *   the two callers genuinely want opposite things.
+ *
+ *   **True (the default) for the privacy notice**: the marker is rendered
+ *   literally, because that text is a legal document and silently dropping
+ *   characters from one because a typo confused a parser is worse than showing
+ *   two asterisks.
+ *
+ *   **False for the Home briefing**: that text is written by a language model
+ *   which is *instructed* to bold names, so a stray marker is a model slip
+ *   rather than an authored character. iOS is explicit about it —
+ *   "raw asterisks must never reach a caregiver's screen" — and strips.
  */
-internal fun boldRuns(source: String): BoldRuns {
+internal fun boldRuns(source: String, keepUnmatchedMarkers: Boolean = true): BoldRuns {
     if (!source.contains(MARKER)) return BoldRuns(source, emptyList())
 
     val text = StringBuilder(source.length)
@@ -46,9 +54,14 @@ internal fun boldRuns(source: String): BoldRuns {
         if (source.startsWith(MARKER, index)) {
             if (openAt < 0) {
                 // Only treat this as an opener if there is a closer for it.
-                // Otherwise it is literal, and falls through to be copied.
+                // Otherwise it is literal, and falls through to be copied — or
+                // dropped, when the caller does not want stray markers shown.
                 if (source.indexOf(MARKER, index + MARKER.length) >= 0) {
                     openAt = text.length
+                    index += MARKER.length
+                    continue
+                }
+                if (!keepUnmatchedMarkers) {
                     index += MARKER.length
                     continue
                 }
@@ -65,8 +78,8 @@ internal fun boldRuns(source: String): BoldRuns {
 
     // An opener whose closer turned out to be inside another span. Nothing to
     // style, and the marker was already consumed — restore it so no character
-    // of the notice is lost.
-    if (openAt >= 0) text.insert(openAt, MARKER)
+    // of the notice is lost, unless the caller asked for markers to be dropped.
+    if (openAt >= 0 && keepUnmatchedMarkers) text.insert(openAt, MARKER)
 
     return BoldRuns(text.toString(), bold)
 }

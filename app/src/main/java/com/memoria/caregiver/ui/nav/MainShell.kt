@@ -231,6 +231,14 @@ fun MainShell(
                             onAddPatient = onAddPatient,
                         )
                     } else {
+                        // Keyed on the facts the briefing narrates, not on the
+                        // tab or a timer: a summary must never outlive what it
+                        // describes. A camera flipping online or a new event
+                        // changes the signature and re-asks; nothing else does,
+                        // so idling on Home costs no calls.
+                        LaunchedEffect(state.factSignature) {
+                            rosterViewModel.refreshBriefing()
+                        }
                         RosterScreen(
                             state = state,
                             resolvePhotoUrl = rosterViewModel::resolvePhotoUrl,
