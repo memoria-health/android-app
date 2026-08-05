@@ -47,8 +47,6 @@ import com.memoria.caregiver.ui.events.EventReviewScreen
 import com.memoria.caregiver.ui.events.EventReviewState
 import com.memoria.caregiver.ui.events.EventsListViewModel
 import com.memoria.caregiver.ui.nav.MainShell
-import com.memoria.caregiver.ui.cameras.CameraListScreen
-import com.memoria.caregiver.ui.cameras.CameraListViewModel
 import com.memoria.caregiver.ui.detectors.PatientDetectorsScreen
 import com.memoria.caregiver.ui.detectors.PatientDetectorsViewModel
 import com.memoria.caregiver.ui.patient.PatientShell
@@ -485,10 +483,6 @@ private fun PatientTabs(
     val openEvent by eventsViewModel.openEvent.collectAsState()
     val link by env.deepLink.state.collectAsState()
 
-    val camerasViewModel: CameraListViewModel = viewModel(
-        key = "cameras:$patientId",
-        factory = viewModelFactory { initializer { CameraListViewModel(env.api, patientId) } },
-    )
     val detectorsViewModel: PatientDetectorsViewModel = viewModel(
         key = "detectors:$patientId",
         factory = viewModelFactory { initializer { PatientDetectorsViewModel(env.api, patientId) } },
@@ -603,17 +597,8 @@ private fun PatientTabs(
                 // opened from a tile and one opened from the list are one
                 // screen with one state.
                 onOpenCameraDetail = { destination = PatientDestination.Camera(it) },
-            )
-        },
-        camerasContent = {
-            val cameraState by camerasViewModel.state.collectAsState()
-            CameraListScreen(
-                state = cameraState,
-                onSelectCamera = { destination = PatientDestination.Camera(it) },
-                // The sheet is reachable and its phone tab is complete. Its
-                // sensor tab's step 2 is still blocked on QUESTIONS.md Q5 —
-                // Android has no equivalent of the captive portal iOS relies on
-                // — and says so on screen rather than rendering an inert form.
+                // Was the Sensors tab's button. Same destination — only the
+                // route in changed.
                 onAddSensor = { destination = PatientDestination.AddSensor },
             )
         },

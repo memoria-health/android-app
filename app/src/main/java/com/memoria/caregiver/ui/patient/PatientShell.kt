@@ -32,7 +32,6 @@ import androidx.compose.ui.unit.dp
 import com.memoria.caregiver.ui.nav.DetectorsTabGlyph
 import com.memoria.caregiver.ui.nav.EventsTabGlyph
 import com.memoria.caregiver.ui.nav.LiveTabGlyph
-import com.memoria.caregiver.ui.nav.SensorsTabGlyph
 import com.memoria.caregiver.ui.nav.SettingsTabGlyph
 import com.memoria.caregiver.ui.theme.NemaraType
 import com.memoria.caregiver.analytics.LocalAnalytics
@@ -98,7 +97,6 @@ fun PatientShell(
      */
     onContactSupport: () -> Unit = {},
     liveContent: @Composable () -> Unit,
-    camerasContent: @Composable () -> Unit,
     detectorsContent: @Composable () -> Unit,
     settingsContent: @Composable () -> Unit,
 ) {
@@ -234,7 +232,6 @@ fun PatientShell(
                         )
                     }
 
-                    PatientTab.CAMERAS -> camerasContent()
                     PatientTab.DETECTORS -> detectorsContent()
                     PatientTab.SETTINGS -> settingsContent()
                 }
@@ -251,10 +248,12 @@ fun PatientShell(
 }
 
 /**
- * The five patient tabs, in iOS's order.
+ * The four patient tabs, in iOS's order (2026-08-05, was five).
  *
- * "Sensors" rather than "Cameras" in the bar: the product calls the hardware a
- * sensor to the caregiver, and only the code calls it a camera.
+ * Sensors folded into Live: it was a whole tab for a list you consult when
+ * something is wrong and otherwise never open, and Live already carried the
+ * same list under the feeds. Live now owns the roster, the per-sensor rows and
+ * pairing.
  */
 enum class PatientTab(
     val title: String,
@@ -263,7 +262,6 @@ enum class PatientTab(
 ) {
     LIVE("Live", "patient.live", LiveTabGlyph),
     EVENTS("Events", "patient.events", EventsTabGlyph),
-    CAMERAS("Sensors", "patient.sensors", SensorsTabGlyph),
     DETECTORS("Detectors", "patient.detectors", DetectorsTabGlyph),
     SETTINGS("Settings", "patient.settings", SettingsTabGlyph),
 }

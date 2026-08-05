@@ -66,6 +66,8 @@ import com.memoria.caregiver.ui.theme.TerraInk
 import com.memoria.caregiver.ui.theme.Warning
 import io.livekit.android.room.Room
 import io.livekit.android.room.track.VideoTrack
+import com.memoria.caregiver.ui.cameras.PlusVector
+import androidx.compose.foundation.layout.heightIn
 
 /**
  * The "Live" sub-tab. Spec: `Features/Patient/Live/PatientLiveView.swift`,
@@ -135,6 +137,8 @@ fun LiveVideoScreen(
     onCaptureClip: (String) -> Unit,
     onDisconnectAll: () -> Unit,
     onReconnectAll: () -> Unit,
+    /** Pairing, moved here when the Sensors tab folded into Live. */
+    onAddSensor: () -> Unit,
     videoTile: @Composable (LiveVideoTile, Modifier) -> Unit = { tile, tileModifier ->
         DefaultLiveVideoTile(tile, tileModifier)
     },
@@ -199,6 +203,7 @@ fun LiveVideoScreen(
             cameras = state.cameras,
             onlineCount = online.size,
             onOpenCameraDetail = onOpenCameraDetail,
+            onAddSensor = onAddSensor,
         )
 
         if (state.cameras.isNotEmpty()) {
@@ -786,6 +791,7 @@ private fun CamerasCard(
     cameras: List<Camera>,
     onlineCount: Int,
     onOpenCameraDetail: (String) -> Unit,
+    onAddSensor: () -> Unit,
 ) {
     NemaraCard(modifier = Modifier.fillMaxWidth(), padding = 14.dp) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -797,11 +803,24 @@ private fun CamerasCard(
                 LiveGlyph(name = "wifi", size = 12.dp, tint = Action)
                 NemaraEyebrow(text = "SENSORS · $onlineCount ONLINE")
             }
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 cameras.forEach { camera ->
                     SensorRow(camera = camera, onClick = { onOpenCameraDetail(camera.id) })
                 }
             }
+
+            // Moved here from the Sensors tab. Pairing is rare, but it is the
+            // one thing reachable nowhere else — folding the tab away without
+            // it would have stranded the tab's whole reason to exist for a new
+            // user.
+            NemaraButton(
+                title = "Add a sensor",
+                track = "live.add_sensor",
+                variant = NemaraButtonVariant.Secondary,
+                block = true,
+                icon = PlusVector,
+                onClick = onAddSensor,
+            )
         }
     }
 }
@@ -809,20 +828,27 @@ private fun CamerasCard(
 @Composable
 private fun SensorRow(camera: Camera, onClick: () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth().plainClickable(onClick = onClick),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        // Roomier than it was: this list absorbed the Sensors tab, so it is
+        // now the only way into a sensor's settings. 26dp tiles and 8dp gaps
+        // were fine for a readout; as a destination the row sat under the
+        // 48dp minimum touch target.
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .plainClickable(onClick = onClick),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             modifier = Modifier
-                .size(26.dp)
-                .clip(RoundedCornerShape(7.dp))
+                .size(36.dp)
+                .clip(RoundedCornerShape(9.dp))
                 .background(PaperDim),
             contentAlignment = Alignment.Center,
         ) {
-            SensorSymbol(name = camera.iconName, size = 13.dp, color = Ink2, knockout = PaperDim)
+            SensorSymbol(name = camera.iconName, size = 16.dp, color = Ink2, knockout = PaperDim)
         }
-        Text(text = camera.room, style = NemaraType.bodySmall, color = Ink)
+        Text(text = camera.room, style = NemaraType.body, color = Ink)
         Spacer(Modifier.weight(1f))
         // The app-closed state is spelled out here, not left to the dot: this one
         // needs the app reopened, not a reconnect, and it shows even while paused

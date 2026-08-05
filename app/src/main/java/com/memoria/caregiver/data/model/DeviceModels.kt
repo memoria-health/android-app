@@ -547,7 +547,10 @@ data class Detector(
     val name: String,
     @SerialName("icon_name") val iconName: String,
     val description: String,
-    val category: Category,
+    // Defaulted so `coerceInputValues` has somewhere to land: without a default
+    // an unrecognised category still throws, and this field is on the sign-in
+    // path. See JsonCoders and FINDINGS.md F-44.
+    val category: Category = Category.UNKNOWN,
     val source: Source,
     /** The trigger, the internal temporal nature, and the duration bar. */
     // `alert_trigger` and `is_sustained` exist only on the
@@ -606,7 +609,6 @@ data class Detector(
     @SerialName("created_at") val createdAt: Instant,
     @SerialName("updated_at") val updatedAt: Instant,
 ) {
-    @Serializable
     /**
      * What KIND of thing a detector watches for. SEMANTIC ONLY.
      *
@@ -999,7 +1001,11 @@ data class InferDetectorResponse(
     @SerialName("alert_trigger") val alertTrigger: Detector.AlertTrigger,
     @SerialName("is_sustained") val isSustained: Boolean = false,
     @SerialName("duration_seconds") val durationSeconds: Int? = null,
-    val category: Detector.Category,
+    // Defaulted for the same reason as Detector.category. Not on the sign-in
+    // path, but an inference naming a category this build does not know should
+    // leave the caregiver on the review screen able to pick one, not fail the
+    // whole request.
+    val category: Detector.Category = Detector.Category.UNKNOWN,
     @SerialName("icon_name") val iconName: String,
     val sensitivity: Detector.Sensitivity,
     @SerialName("schedule_config") val scheduleConfig: Detector.ScheduleConfig? = null,

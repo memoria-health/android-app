@@ -26,6 +26,8 @@ import androidx.compose.ui.Modifier
 fun LiveHost(
     viewModel: LiveViewModel,
     onOpenCameraDetail: (String) -> Unit,
+    /** Pairing, moved here when the Sensors tab folded into Live. */
+    onAddSensor: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val state by viewModel.state.collectAsState()
@@ -67,6 +69,7 @@ fun LiveHost(
         onSelectCamera = viewModel::onSelectCamera,
         onToggleAudio = viewModel::toggleAudio,
         onOpenCameraDetail = onOpenCameraDetail,
+        onAddSensor = onAddSensor,
         onExpandCamera = { fullScreenCameraId = it },
         onAcknowledgeSensitiveRoom = viewModel::acknowledgeSensitiveRoom,
         onCallButtonTap = viewModel::onCallButtonTap,

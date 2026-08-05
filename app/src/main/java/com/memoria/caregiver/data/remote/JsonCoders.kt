@@ -89,6 +89,24 @@ object NemaraJson {
         ignoreUnknownKeys = true
         explicitNulls = false
         encodeDefaults = true
+        // An enum value this build does not know falls back to the property's
+        // default instead of throwing.
+        //
+        // `Detector.Category` documents itself as having an UNKNOWN case that
+        // "absorbs a value from a newer server" — and until this flag was set
+        // that was simply not true: kotlinx-serialization threw
+        // `does not contain element with name`, and `category` is on both
+        // Detector and DetectionEvent, both of which load inside `bootstrap()`,
+        // which runs inside SIGN-IN. A fifth category added server-side would
+        // have locked every older Android client out of the app. Same shape as
+        // F-43. See FINDINGS.md F-44.
+        //
+        // This also coerces an explicit `null` into the default for a
+        // non-nullable property that has one, which is a real widening: it
+        // hides a server sending null where it promised a value. Accepted for
+        // the same reason iOS decodes tolerantly everywhere — on this app's
+        // critical path, degrading one field beats failing the whole response.
+        coerceInputValues = true
     }
 
     // ---------------------------------------------------------------------
