@@ -84,11 +84,17 @@ class DetectorLibraryViewModelTest {
         var catalog: String = "[]"
         var catalogStatus: HttpStatusCode = HttpStatusCode.OK
 
+        /** `GET /v1/patients/{id}/cameras` — the room options come from these. */
+        var cameras: String = "[]"
+
         /** `POST /v1/patients/{id}/detectors/from-library`. */
         var created: String = "[]"
         var createStatus: HttpStatusCode = HttpStatusCode.OK
 
         var deleteStatus: HttpStatusCode = HttpStatusCode.OK
+
+        /** `PATCH /v1/detectors/{id}` — the wandering scope write. */
+        var patched: String = "{}"
 
         /** Held open so a test can observe the in-flight window exactly. */
         var addGate: CompletableDeferred<Unit>? = null
@@ -114,6 +120,9 @@ class DetectorLibraryViewModelTest {
                                 respond(catalog, catalogStatus, json)
                             path.endsWith("/detectors") && method == "GET" ->
                                 respond(detectors, headers = json)
+                            path.endsWith("/cameras") && method == "GET" ->
+                                respond(cameras, headers = json)
+                            method == "PATCH" -> respond(patched, headers = json)
                             method == "DELETE" -> respond("", deleteStatus, json)
                             else -> respond("[]", headers = json)
                         }
@@ -136,6 +145,133 @@ class DetectorLibraryViewModelTest {
         mode = mode,
         onFinished = { finishes++ },
     )
+
+    private fun cameraJson(id: String, room: String) = """
+        {"id":"$id","patient_id":"$PATIENT","display_id":1,"room":"$room",
+         "icon_name":"tv","online":true,"paired":true,"source_type":"phone",
+         "desired_state":"connected","disabled":false,"ai_paused":false,
+         "livekit_identity":"cam_$id","privacy_enabled":false,
+         "created_at":"2026-05-20T10:00:00.000000+00:00",
+         "updated_at":"2026-05-20T10:00:00.000000+00:00"}
+    """.trimIndent()
+
+    // -----------------------------------------------------------------------
+    // Wandering room scope (A4)
+    // -----------------------------------------------------------------------
+
+    /**
+     * Wandering is the one per-camera preset, and the moment it is added is the
+     * only point where the caregiver has the context to scope it. Afterwards it
+     * is a settings screen they have no reason to open, so the scope would stay
+     * at "everywhere" and the exit-door section would appear on every camera —
+     * the noise the feature exists to remove.
+     */
+    @Test fun `adding wandering asks which cameras should watch it`() = runTest(mainDispatcher) {
+        backend.cameras = "[" + cameraJson("cam-1", "Hallway") + "," + cameraJson("cam-2", "Kitchen") + "]"
+        backend.catalog = "[" + entryJson("wandering", "Wandering", recommended = false, alreadyAdded = false) + "]"
+        backend.created = "[" + detectorJson(WANDERING_ID, "Wandering", "wandering") + "]"
+        val vm = viewModel(DetectorLibraryMode.Add)
+        vm.load(); vm.settle()
+        backend.api.loadCameras(PATIENT)
+        vm.toggleEntry(vm.state.value.entries.first { it.key == "wandering" })
+
+        vm.submit(); vm.settle()
+
+        assertTrue(vm.state.value.wanderingRoomPrompt)
+        assertEquals(listOf("Hallway", "Kitchen"), vm.state.value.wanderingRoomOptions)
+        // Not finished yet — the screen stays up for the scope question.
+        assertEquals(0, finishes)
+    }
+
+    @Test fun `adding anything else does not ask`() = runTest(mainDispatcher) {
+        backend.cameras = "[" + cameraJson("cam-1", "Hallway") + "]"
+        backend.catalog = "[" + entryJson("fall", "Fall", recommended = false, alreadyAdded = false) + "]"
+        backend.created = "[" + detectorJson(FALL_ID, "Fall", "fall") + "]"
+        val vm = viewModel(DetectorLibraryMode.Add)
+        vm.load(); vm.settle()
+        backend.api.loadCameras(PATIENT)
+        vm.toggleEntry(vm.state.value.entries.first { it.key == "fall" })
+
+        vm.submit(); vm.settle()
+
+        assertFalse(vm.state.value.wanderingRoomPrompt)
+        assertEquals(1, finishes)
+    }
+
+    /**
+     * With no cameras there is nothing to choose between, and a sheet listing
+     * nothing would be a dead end between the caregiver and a finished add.
+     */
+    @Test fun `adding wandering with no cameras finishes without asking`() = runTest(mainDispatcher) {
+        backend.cameras = "[]"
+        backend.catalog = "[" + entryJson("wandering", "Wandering", recommended = false, alreadyAdded = false) + "]"
+        backend.created = "[" + detectorJson(WANDERING_ID, "Wandering", "wandering") + "]"
+        val vm = viewModel(DetectorLibraryMode.Add)
+        vm.load(); vm.settle()
+        backend.api.loadCameras(PATIENT)
+        vm.toggleEntry(vm.state.value.entries.first { it.key == "wandering" })
+
+        vm.submit(); vm.settle()
+
+        assertFalse(vm.state.value.wanderingRoomPrompt)
+        assertEquals(1, finishes)
+    }
+
+    @Test fun `choosing rooms writes where_rooms and closes`() = runTest(mainDispatcher) {
+        backend.cameras = "[" + cameraJson("cam-1", "Hallway") + "," + cameraJson("cam-2", "Kitchen") + "]"
+        backend.catalog = "[" + entryJson("wandering", "Wandering", recommended = false, alreadyAdded = false) + "]"
+        backend.created = "[" + detectorJson(WANDERING_ID, "Wandering", "wandering") + "]"
+        backend.patched = detectorJson(WANDERING_ID, "Wandering", "wandering")
+        val vm = viewModel(DetectorLibraryMode.Add)
+        vm.load(); vm.settle()
+        backend.api.loadCameras(PATIENT)
+        vm.toggleEntry(vm.state.value.entries.first { it.key == "wandering" })
+        vm.submit(); vm.settle()
+
+        vm.toggleWanderingRoom("Hallway")
+        vm.confirmWanderingRooms(); vm.settle()
+
+        assertTrue(backend.seen.any { it == "PATCH /v1/detectors/$WANDERING_ID" })
+        assertTrue(backend.bodies.last().contains("Hallway"))
+        assertFalse(vm.state.value.wanderingRoomPrompt)
+        assertEquals(1, finishes)
+    }
+
+    /**
+     * An empty selection means EVERY room — which is what a null `where_rooms`
+     * already encodes and what the sheet's footer says. Sending an empty array
+     * instead would scope wandering to nothing and silently stop it watching
+     * anywhere.
+     */
+    @Test fun `choosing no rooms sends nothing and still closes`() = runTest(mainDispatcher) {
+        backend.cameras = "[" + cameraJson("cam-1", "Hallway") + "]"
+        backend.catalog = "[" + entryJson("wandering", "Wandering", recommended = false, alreadyAdded = false) + "]"
+        backend.created = "[" + detectorJson(WANDERING_ID, "Wandering", "wandering") + "]"
+        val vm = viewModel(DetectorLibraryMode.Add)
+        vm.load(); vm.settle()
+        backend.api.loadCameras(PATIENT)
+        vm.toggleEntry(vm.state.value.entries.first { it.key == "wandering" })
+        vm.submit(); vm.settle()
+
+        vm.confirmWanderingRooms(); vm.settle()
+
+        assertFalse("scoped wandering to nothing", backend.seen.any { it.startsWith("PATCH") })
+        assertEquals(1, finishes)
+    }
+
+    /**
+     * Toggling is a toggle: tapping a chosen room unchooses it. Trivial, and the
+     * kind of thing a set-based implementation gets wrong by adding twice.
+     */
+    @Test fun `a room can be unchosen`() = runTest(mainDispatcher) {
+        val vm = viewModel(DetectorLibraryMode.Add)
+
+        vm.toggleWanderingRoom("Hallway")
+        vm.toggleWanderingRoom("Kitchen")
+        vm.toggleWanderingRoom("Hallway")
+
+        assertEquals(setOf("Kitchen"), vm.state.value.wanderingRoomsSelected)
+    }
 
     /**
      * The `keys` array of the last `from-library` POST, as a set: `keysToAdd`

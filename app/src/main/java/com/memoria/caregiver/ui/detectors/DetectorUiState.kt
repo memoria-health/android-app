@@ -61,6 +61,20 @@ data class DetectorLibraryState(
     val isSubmitting: Boolean = false,
     /** Rendered verbatim above the footer button. */
     val submitError: String? = null,
+    /**
+     * The "which cameras should watch for wandering?" step, shown after the
+     * detectors are created and before the screen closes.
+     *
+     * Wandering is the one preset that is per-camera: it needs to know which
+     * rooms lead outside. Asking at the moment it is added is the only point
+     * where the caregiver has the context — afterwards it is a settings screen
+     * they have no reason to visit, and the exit-door section stays invisible
+     * on every camera until they do (see `wanderingWatchesRoom`).
+     */
+    val wanderingRoomPrompt: Boolean = false,
+    /** Distinct, sorted room names from the patient's cameras. */
+    val wanderingRoomOptions: List<String> = emptyList(),
+    val wanderingRoomsSelected: Set<String> = emptySet(),
 ) {
     /** Onboarding can skip the whole step; add-mode just closes. */
     val leadingActionTitle: String

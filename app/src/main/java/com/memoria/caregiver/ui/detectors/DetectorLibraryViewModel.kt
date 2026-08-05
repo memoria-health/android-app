@@ -3,6 +3,7 @@ package com.memoria.caregiver.ui.detectors
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.memoria.caregiver.data.model.DetectorLibraryEntry
+import com.memoria.caregiver.data.model.UpdateDetectorRequest
 import com.memoria.caregiver.data.remote.ApiError
 import com.memoria.caregiver.data.remote.NemaraApiClient
 import kotlinx.coroutines.CancellationException
@@ -162,7 +163,19 @@ class DetectorLibraryViewModel(
                         api.deleteDetector(detector.id)
                     }
                 }
-                onFinished()
+                // Wandering is per-camera, so ask which rooms lead outside
+                // while the caregiver still has the context. Only when it was
+                // added in THIS submit — reopening the library and adding
+                // something else must not re-ask — and only when there are
+                // cameras to choose between.
+                val rooms = roomOptions()
+                if (WANDERING_KEY in keysToAdd && rooms.isNotEmpty()) {
+                    _state.update {
+                        it.copy(wanderingRoomPrompt = true, wanderingRoomOptions = rooms)
+                    }
+                } else {
+                    onFinished()
+                }
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (e: Throwable) {
@@ -170,6 +183,60 @@ class DetectorLibraryViewModel(
             } finally {
                 _state.update { it.copy(isSubmitting = false) }
             }
+        }
+    }
+
+    /** Distinct, non-blank camera room names, sorted. iOS builds the same list inline. */
+    private fun roomOptions(): List<String> =
+        api.camerasByPatient[patientId].orEmpty()
+            .filterNot { it.disabled }
+            .map { it.room.trim() }
+            .filter { it.isNotEmpty() }
+            .distinct()
+            .sorted()
+
+    fun toggleWanderingRoom(room: String) {
+        _state.update {
+            val selected = it.wanderingRoomsSelected
+            it.copy(
+                wanderingRoomsSelected =
+                if (room in selected) selected - room else selected + room,
+            )
+        }
+    }
+
+    /**
+     * Save the room choice and leave.
+     *
+     * **An empty selection is not an error and not a no-op — it means every
+     * room**, which is what `where_rooms = null` already encodes and what the
+     * sheet's footer says. So nothing is sent, and the detector keeps the
+     * server's default. Sending an empty array instead would scope wandering to
+     * nothing and silently stop it watching anywhere.
+     *
+     * A failed PATCH still closes the screen. The detectors were created — that
+     * is the thing the caregiver asked for and it succeeded — and holding them
+     * on this sheet to retry a scope refinement would make the whole add look
+     * like it failed. Scope stays at "every room", which is the safe direction
+     * for a wandering detector.
+     */
+    fun confirmWanderingRooms() {
+        val chosen = _state.value.wanderingRoomsSelected
+        viewModelScope.launch {
+            if (chosen.isNotEmpty()) {
+                val wandering = api.detectorsByPatient[patientId].orEmpty()
+                    .firstOrNull { it.identifier == WANDERING_KEY }
+                if (wandering != null) {
+                    runCatching {
+                        api.updateDetector(
+                            wandering.id,
+                            UpdateDetectorRequest(whereRooms = chosen.toList().sorted()),
+                        )
+                    }
+                }
+            }
+            _state.update { it.copy(wanderingRoomPrompt = false) }
+            onFinished()
         }
     }
 
@@ -191,3 +258,6 @@ class DetectorLibraryViewModel(
  * rather than through a second branch.
  */
 private class MissingDetectorForKey(key: String) : Exception(missingDetectorForKeyMessage(key))
+
+/** The catalog key of the wandering preset. It is the only per-camera preset. */
+private const val WANDERING_KEY = "wandering"

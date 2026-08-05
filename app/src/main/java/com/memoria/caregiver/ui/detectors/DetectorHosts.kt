@@ -161,6 +161,22 @@ fun DetectorLibraryHost(
         // would quit the app mid-onboarding.
         BackHandler(onBack = onLeading)
 
+        if (state.wanderingRoomPrompt) {
+            // Back does NOT cancel this step. The detectors are already
+            // created; the only thing left to decide is scope, and backing out
+            // of it should mean "every room" rather than leaving the caregiver
+            // on a screen whose work is done. Done is the single way forward.
+            BackHandler(onBack = vm::confirmWanderingRooms)
+            WanderingRoomsSheet(
+                rooms = state.wanderingRoomOptions,
+                selected = state.wanderingRoomsSelected,
+                onToggle = vm::toggleWanderingRoom,
+                onDone = vm::confirmWanderingRooms,
+                modifier = modifier,
+            )
+            return@ScopedViewModelStore
+        }
+
         DetectorLibraryScreen(
             state = state,
             modifier = modifier,
