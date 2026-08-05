@@ -1166,8 +1166,13 @@ data class DetectionEvent(
 
     /**
      * Human-readable time label for the event card and detail header.
-     * Same day: "HH:mm". Yesterday: "Yesterday HH:mm". Older this week:
-     * "EEE HH:mm", for example "Mon 16:42". Beyond that: "MMM d HH:mm".
+     *
+     * Always 12-hour with AM/PM, and **no weekday**: the relative "2d ago" chip
+     * beside it already carries recency, so a weekday was a second answer to a
+     * question already answered (iOS `9d12c07`, `daf1063`).
+     *
+     * Same day: "4:42 PM". Yesterday: "Yesterday 4:42 PM". Older: "4:42 PM" —
+     * time only, because the chip says which day.
      */
     val time: String get() = timeLabel(nowInstant())
 
@@ -1182,16 +1187,18 @@ data class DetectionEvent(
     internal fun timeLabel(now: Instant, zone: ZoneId = ZoneId.systemDefault()): String {
         val occurred = occurredAt.toJavaTime().atZone(zone)
         val current = now.toJavaTime().atZone(zone)
-        val hm = DateTimeFormatter.ofPattern("HH:mm", Locale.US)
+        // Locale.US, not the device locale, and that is deliberate: the format
+        // is "h:mm a", so a device locale would decide whether "PM" reads as
+        // "PM", "p.m." or "" — and the rest of this app's copy is US English.
+        val hm = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
         if (occurred.toLocalDate() == current.toLocalDate()) {
             return hm.format(occurred)
         }
         if (occurred.toLocalDate() == current.toLocalDate().minusDays(1)) {
             return "Yesterday ${hm.format(occurred)}"
         }
-        val days = ChronoUnit.DAYS.between(occurred, current)
-        val pattern = if (days < 7) "EEE HH:mm" else "MMM d HH:mm"
-        return DateTimeFormatter.ofPattern(pattern, Locale.US).format(occurred)
+        // Older than yesterday: time only. The "Xd ago" chip carries the day.
+        return hm.format(occurred)
     }
 
     /** [ago] against a caller-supplied clock. See [timeLabel]. */

@@ -1246,28 +1246,45 @@ class DeviceModelsTest {
     )
 
     @Test
-    fun `time shows the clock only for an event earlier today`() {
+    fun `time shows a 12-hour clock for an event earlier today`() {
         val e = eventAt("2026-05-21T16:42:00+00:00")
-        assertEquals("16:42", e.timeLabel(utcInstant("2026-05-21T20:00:00Z"), utc))
+        assertEquals("4:42 PM", e.timeLabel(utcInstant("2026-05-21T20:00:00Z"), utc))
     }
 
     @Test
     fun `time labels yesterday explicitly`() {
         val e = eventAt("2026-05-21T16:42:00+00:00")
-        assertEquals("Yesterday 16:42", e.timeLabel(utcInstant("2026-05-22T01:00:00Z"), utc))
+        assertEquals("Yesterday 4:42 PM", e.timeLabel(utcInstant("2026-05-22T01:00:00Z"), utc))
     }
 
     @Test
-    fun `time uses the weekday within the last week`() {
-        // 2026-05-21 is a Thursday.
+    fun `an older event shows the time alone, with no weekday`() {
+        // 2026-05-21 is a Thursday, and the label deliberately does not say so:
+        // the "3d ago" chip beside it already carries recency, and a weekday was
+        // a second answer to a question already answered (iOS 9d12c07).
         val e = eventAt("2026-05-21T16:42:00+00:00")
-        assertEquals("Thu 16:42", e.timeLabel(utcInstant("2026-05-24T20:00:00Z"), utc))
+        assertEquals("4:42 PM", e.timeLabel(utcInstant("2026-05-24T20:00:00Z"), utc))
     }
 
     @Test
-    fun `time falls back to a calendar date beyond a week`() {
+    fun `an event beyond a week still shows the time alone`() {
+        // No calendar-date fallback either — same reasoning, and the chip
+        // switches to "11d ago" on its own.
         val e = eventAt("2026-05-21T16:42:00+00:00")
-        assertEquals("May 21 16:42", e.timeLabel(utcInstant("2026-06-01T20:00:00Z"), utc))
+        assertEquals("4:42 PM", e.timeLabel(utcInstant("2026-06-01T20:00:00Z"), utc))
+    }
+
+    @Test
+    fun `morning and midnight read correctly on a 12-hour clock`() {
+        // The two h:mm a cases that a 24-hour pattern would have hidden.
+        assertEquals(
+            "9:05 AM",
+            eventAt("2026-05-21T09:05:00+00:00").timeLabel(utcInstant("2026-05-21T20:00:00Z"), utc),
+        )
+        assertEquals(
+            "12:30 AM",
+            eventAt("2026-05-21T00:30:00+00:00").timeLabel(utcInstant("2026-05-21T20:00:00Z"), utc),
+        )
     }
 
     @Test

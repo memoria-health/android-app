@@ -116,35 +116,17 @@ fun EventsListScreen(
 
 @Composable
 private fun TitleRow() {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
-        horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
-        // iOS aligns on .lastTextBaseline, so the serif title and the mono pill
-        // sit on a shared baseline rather than on a shared box edge.
-        verticalAlignment = Alignment.Bottom,
-    ) {
-        Text(
-            text = "Recent events",
-            modifier = Modifier.alignByBaseline(),
-            style = NemaraType.title2,
-            // Per-call-site kerning, per DECISIONS.md D-008. iOS: .kerning(-0.4)
-            letterSpacing = (-0.4).sp,
-            color = Ink,
-        )
-        Spacer(Modifier.weight(1f))
-        Text(
-            text = "Last 7d",
-            modifier = Modifier
-                .alignByBaseline()
-                .clip(CircleShape)
-                .background(PaperDim)
-                .padding(horizontal = 10.dp, vertical = 4.dp),
-            style = NemaraType.monoSmall.copy(fontWeight = FontWeight.Bold),
-            // iOS: .tracking(0.5)
-            letterSpacing = 0.5.sp,
-            color = Ink2,
-        )
-    }
+    // Deliberately empty, and kept rather than deleted.
+    //
+    // The July declutter removed both halves: the "Recent events" heading, which
+    // sat above a list of events on a tab called Events, and the "Last 7d" chip,
+    // which described a window the caregiver cannot change (iOS `07c901b`,
+    // `18123ac`). iOS left the same empty container in place.
+    //
+    // Left as a named no-op because the top padding it carried is load-bearing
+    // for the list below it, and because a reader looking for the heading finds
+    // this instead of nothing.
+    Spacer(Modifier.padding(top = 2.dp))
 }
 
 /**

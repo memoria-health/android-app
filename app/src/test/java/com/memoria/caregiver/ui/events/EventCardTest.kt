@@ -45,23 +45,22 @@ class EventCardTest {
         }
     }
 
-    /** Two safety events and one routine one, so a stuck label shows as a count. */
-    @Test
-    fun `category drives the pill label`() {
-        setUp()
-        compose.onAllNodes(hasText("SAFETY")).assertCountEquals(2)
-        compose.onAllNodes(hasText("ROUTINE")).assertCountEquals(1)
-    }
-
     /**
-     * iOS: `if event.source == .custom`. Exactly one of the three cards is
-     * custom, so a count of one is the assertion — "displayed somewhere" would
-     * pass even if the pill leaked onto every card.
+     * The category pills are GONE (iOS `daf1063`), and this asserts their
+     * absence rather than being deleted.
+     *
+     * Deleting the test would have left nothing saying the removal was
+     * deliberate, and the next person to see a bare card would be free to add
+     * the pills back. The category was the same word on nearly every card, so
+     * it separated nothing — and the glyph beside the title already carries the
+     * type.
      */
     @Test
-    fun `the custom pill appears on the custom event only`() {
+    fun `no category or custom pills are rendered`() {
         setUp()
-        compose.onAllNodes(hasText("CUSTOM")).assertCountEquals(1)
+        compose.onAllNodes(hasText("SAFETY")).assertCountEquals(0)
+        compose.onAllNodes(hasText("ROUTINE")).assertCountEquals(0)
+        compose.onAllNodes(hasText("CUSTOM")).assertCountEquals(0)
     }
 
     /** iOS: the REVIEWED capsule replaces the chevron, on reviewed events only. */

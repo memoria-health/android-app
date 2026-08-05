@@ -616,6 +616,21 @@ read, which is itself the trap this finding describes.
 five passed in isolation immediately afterwards. That is the first named
 instance, and it matches the original diagnosis rather than extending it.
 
+**A third test joined the set on 2026-08-04:**
+`EventDetailViewModelTest > the event follows the cache while the detail is open`.
+Seven of seven in isolation, and a full `--rerun-tasks` immediately after was
+2177/2177. Same shape as the other two — a ViewModel test driving a mock backend
+and asserting on a cache read — which is now enough of a pattern to name: **the
+flakes are all host/ViewModel tests that await a MockEngine response and then
+assert on state**, never the pure-logic tests. Whatever the race is, it is in
+that harness rather than in three unrelated features.
+
+That narrows the fix when it is worth doing: one shared `settle()` discipline
+for those tests, of the kind `DetectorLibraryViewModelTest` already has and
+documents. It is not worth doing mid-re-sync, and it is recorded rather than
+absorbed because a suite that fails one run in five teaches people to re-run
+instead of read.
+
 ---
 
 

@@ -61,8 +61,10 @@ fun EventCard(
 ) {
     val isSafety = event.category == Detector.Category.SAFETY
     val cardBackground = if (isSafety) TerraSoft else SkySoft
+    // Still used, and now the ONLY thing carrying category: it tints the glyph.
+    // That is the whole argument for dropping the pills — the type was already
+    // being said twice.
     val categoryBadgeColor = if (isSafety) Terra else Sky
-    val categoryLabel = if (isSafety) "SAFETY" else "ROUTINE"
 
     // SwiftUI's `.opacity(...)` on a container applies to each LEAF, not to the
     // flattened group, unless `.compositingGroup()` intervenes — and
@@ -102,25 +104,10 @@ fun EventCard(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(5.dp),
             ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    // The one place the per-leaf rule is not honoured: the pill
-                    // is a shared component whose foreground is fixed inside it,
-                    // so the factor can only be applied to the pill as a group.
-                    // Two leaves, one of them a 9pt label — the difference is
-                    // sub-perceptual, and forking the component would be worse.
-                    NemaraSolidPill(
-                        text = categoryLabel,
-                        background = categoryBadgeColor,
-                        modifier = Modifier.alpha(dim),
-                    )
-                    if (event.source == Detector.Source.CUSTOM) {
-                        NemaraSolidPill(
-                            text = "CUSTOM",
-                            background = Terra,
-                            modifier = Modifier.alpha(dim),
-                        )
-                    }
-                }
+                // SAFETY / ROUTINE / CUSTOM pills removed in the July declutter
+                // (iOS `daf1063`). The category was the same word on nearly
+                // every card, so it separated nothing — and the glyph beside
+                // the title already carries the type.
                 Text(
                     text = event.title,
                     // NemaraType.eventTitle is the semibold form. iOS:
@@ -134,11 +121,9 @@ fun EventCard(
                     letterSpacing = (-0.3).sp,
                     color = Ink.dimmed(dim),
                 )
-                Text(
-                    text = event.location,
-                    style = NemaraType.caption,
-                    color = Ink2.dimmed(dim),
-                )
+                // The location line is gone too: the narrative on the detail
+                // screen names the room, and repeating it under every title
+                // made the list read as a table rather than a feed.
             }
         }
 

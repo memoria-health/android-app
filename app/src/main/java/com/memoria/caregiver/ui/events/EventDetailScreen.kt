@@ -94,7 +94,6 @@ fun EventDetailScreen(
     val isSafety = event.category == Detector.Category.SAFETY
     val tone = if (isSafety) Terra else Sky
     val toneSoft = if (isSafety) TerraSoft else SkySoft
-    val categoryLabel = if (isSafety) "SAFETY" else "ROUTINE"
 
     // Deliberately a plain `remember`, deliberately KEYED ON THE EVENT ID, and
     // deliberately not hoisted into EventDetailState. The dignity cover must be
@@ -140,13 +139,9 @@ fun EventDetailScreen(
                     ) {
                         EventGlyph(name = event.iconName, size = 13.dp, tint = tone)
                     }
-                    Text(
-                        text = categoryLabel,
-                        style = NemaraType.monoSmall.copy(fontWeight = FontWeight.Bold),
-                        // iOS: .tracking(0.7)
-                        letterSpacing = 0.7.sp,
-                        color = tone,
-                    )
+                    // Category label removed in the July declutter (iOS
+                    // `daf1063`): the glyph left of it already carries the type,
+                    // and the word was the same on nearly every event.
                 }
                 Text(
                     text = event.title,
