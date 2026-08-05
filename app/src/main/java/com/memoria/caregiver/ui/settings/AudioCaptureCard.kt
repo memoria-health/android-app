@@ -18,6 +18,7 @@ import com.memoria.caregiver.ui.components.NemaraCard
 import com.memoria.caregiver.ui.components.NemaraToggle
 import com.memoria.caregiver.ui.theme.Action
 import com.memoria.caregiver.ui.theme.ActionSoft
+import com.memoria.caregiver.ui.components.InfoDot
 import com.memoria.caregiver.ui.theme.Ink
 import com.memoria.caregiver.ui.theme.Ink3
 import com.memoria.caregiver.ui.theme.NemaraType
@@ -80,18 +81,30 @@ fun AudioCaptureCard(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(3.dp),
             ) {
-                Text(text = "Audio capture", style = NemaraType.bodySemibold, color = Ink)
-                Text(
-                    text = errorText ?: if (enabled) {
-                        "Cameras capture sound for live audio, clips, and speech alerts."
-                    } else {
-                        "No sound is captured, recorded, or analyzed. Required for care " +
-                            "facilities."
-                    },
-                    style = NemaraType.caption,
-                    color = if (errorText == null) Ink3 else Terra,
-                    lineHeight = CaptionLineHeight,
-                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(text = "Audio capture", style = NemaraType.bodySemibold, color = Ink)
+                    InfoDot(
+                        "On: cameras capture sound for live audio, clips, and speech " +
+                            "alerts. Off: no sound is captured, recorded, or analyzed - " +
+                            "required for care facilities.",
+                    )
+                }
+                // The FAILURE message stays a visible caption. It shared the
+                // caption slot with the explanation, and only the explanation
+                // belongs behind a tap: a write that did not land is not an
+                // aside, and a caregiver who thinks they turned audio off when
+                // they did not has been told the opposite of the truth.
+                errorText?.let {
+                    Text(
+                        text = it,
+                        style = NemaraType.caption,
+                        color = Terra,
+                        lineHeight = CaptionLineHeight,
+                    )
+                }
             }
 
             NemaraToggle(

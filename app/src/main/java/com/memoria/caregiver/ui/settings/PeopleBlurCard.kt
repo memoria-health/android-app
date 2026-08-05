@@ -19,6 +19,7 @@ import com.memoria.caregiver.ui.live.PeopleBlurAvailability
 import com.memoria.caregiver.ui.components.NemaraToggle
 import com.memoria.caregiver.ui.theme.Action
 import com.memoria.caregiver.ui.theme.ActionSoft
+import com.memoria.caregiver.ui.components.InfoDot
 import com.memoria.caregiver.ui.theme.Ink
 import com.memoria.caregiver.ui.theme.Ink3
 import com.memoria.caregiver.ui.theme.NemaraType
@@ -92,24 +93,36 @@ fun PeopleBlurCard(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(3.dp),
             ) {
-                Text(text = "Blur people", style = NemaraType.bodySemibold, color = Ink)
-                Text(
-                    text = if (!available) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(text = "Blur people", style = NemaraType.bodySemibold, color = Ink)
+                    InfoDot(
+                        "Blurs people in the live feed on this device only. The room " +
+                            "stays visible; recording and what others see are unchanged.",
+                    )
+                }
+                // The unavailable notice STAYS a visible caption, and does not
+                // become an InfoDot with the rest.
+                //
+                // The declutter's argument is that a caption explaining what a
+                // working control does is noise once the caregiver has read it
+                // once. This sentence is not that: it says the control does
+                // nothing at all in this build (REQ-23 — no person detector is
+                // vendored). Hiding "this doesn't work yet" behind a tap would
+                // leave a toggle that looks live and isn't, which is the one
+                // thing a privacy control must never do.
+                if (!available) {
+                    Text(
                         // Says what is true, and does not promise a date.
-                        "Not available in this version yet. When it arrives, it " +
-                            "will blur anyone in the live feed on this device only."
-                    } else if (enabled) {
-                        "People in the live feed are blurred on this device. The room " +
-                            "stays visible. This changes nothing about recording or what " +
-                            "others see."
-                    } else {
-                        "Blur anyone who appears in the live feed while keeping the room " +
-                            "visible. Applies to this device only."
-                    },
-                    style = NemaraType.caption,
-                    color = Ink3,
-                    lineHeight = CaptionLineHeight,
-                )
+                        text = "Not available in this version yet. When it arrives, it " +
+                            "will blur anyone in the live feed on this device only.",
+                        style = NemaraType.caption,
+                        color = Ink3,
+                        lineHeight = CaptionLineHeight,
+                    )
+                }
             }
 
             NemaraToggle(

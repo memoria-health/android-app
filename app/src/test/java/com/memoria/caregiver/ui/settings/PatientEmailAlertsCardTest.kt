@@ -153,9 +153,9 @@ class PatientEmailAlertsCardTest {
             onEnabledChange = { enabled = it },
         )
 
-        compose.onNodeWithText(
-            "When on, every detector event triggers an email to your recipients.",
-        ).assertExists()
+        // The caption this used to assert on moved behind an ⓘ in the July
+        // declutter. What the test is actually about — that flipping the
+        // toggle reports the new value — is below and untouched.
 
         // The toggle carries no text, so it is selected by its semantics role.
         compose.onNode(

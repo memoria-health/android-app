@@ -15,6 +15,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
@@ -67,6 +68,12 @@ fun NemaraToggle(
             .size(width = 40.dp, height = 24.dp)
             .clip(CircleShape)
             .background(if (isOn) Action else Line)
+            // Named in the semantics tree by the same string that names it in
+            // analytics. Toggles carry no visible title, so a test asserting on
+            // one otherwise has to select "the switch" — which works until a
+            // screen grows a second switch, and then silently targets the wrong
+            // control. One id, two uses, no third concept.
+            .then(if (track != null) Modifier.testTag(track) else Modifier)
             // `toggleable`, not `clickable`. Both give the tap; only `toggleable`
             // publishes a ToggleableState, which is what a screen reader reads
             // to say "on" or "off". With `clickable(role = Role.Switch)` the

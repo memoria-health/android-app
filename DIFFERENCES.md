@@ -400,3 +400,30 @@ does and does not earn.
 
 _(Add entries as they arise. Cosmetic gaps found in the Phase 8 screenshot pass
 go here too, each with a reason or a fix.)_
+
+## D18 — `InfoDot` is a dialog, not an anchored popover
+
+**iOS:** `.popover(isPresented:arrowEdge: .top)` with
+`.presentationCompactAdaptation(.popover)` — a small panel anchored to the ⓘ,
+adapting to a sheet on compact widths.
+
+**Android:** a small centred `BasicAlertDialog` carrying the same sentence.
+
+**Why.** Compose has no anchored popover with that behaviour. `Popup` exists but
+positions itself manually, so matching iOS would mean hand-writing edge-collision
+handling for a component used in a dozen places — and a hand-placed popup can end
+up half off-screen on a narrow phone, which the dialog cannot. The content is one
+or two sentences either way, and it dismisses the same way.
+
+**Also on Android and not on iOS:** two captions the declutter did *not* move
+behind the ⓘ.
+
+- `PeopleBlurCard`'s "not available in this version yet" (REQ-23 — no person
+  detector is vendored). iOS has no such state.
+- `AudioCaptureCard`'s failure message, which shared the caption slot with the
+  explanation.
+
+The declutter's argument is that explaining a *working* control is noise once
+read. Neither of those is that: one says the control does nothing, the other says
+a write did not land. Hiding either behind a tap leaves a toggle that looks live
+and is not — the one thing a privacy control must never do.

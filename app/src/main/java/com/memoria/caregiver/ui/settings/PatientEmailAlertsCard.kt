@@ -38,6 +38,7 @@ import com.memoria.caregiver.ui.theme.ActionSoft
 import com.memoria.caregiver.ui.theme.Card
 import com.memoria.caregiver.ui.theme.CardAlt
 import com.memoria.caregiver.ui.theme.Danger
+import com.memoria.caregiver.ui.components.InfoDot
 import com.memoria.caregiver.ui.theme.Ink
 import com.memoria.caregiver.ui.theme.Ink2
 import com.memoria.caregiver.ui.theme.Ink3
@@ -178,21 +179,21 @@ private fun MasterRow(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(3.dp),
         ) {
-            Text(
-                text = "Send email alerts for this patient",
-                style = NemaraType.bodySemibold,
-                color = Ink,
-            )
-            Text(
-                text = if (enabled) {
-                    "Alerts go to your account email plus everyone below."
-                } else {
-                    "When on, every detector event triggers an email to your recipients."
-                },
-                style = NemaraType.caption,
-                color = Ink3,
-                lineHeight = CaptionLineHeight,
-            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Send email alerts for this patient",
+                    style = NemaraType.bodySemibold,
+                    color = Ink,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                InfoDot(
+                    "When on, every detector event emails your account address plus " +
+                        "every recipient below.",
+                )
+            }
         }
 
         NemaraToggle(

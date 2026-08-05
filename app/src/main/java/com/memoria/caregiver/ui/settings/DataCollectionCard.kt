@@ -21,6 +21,7 @@ import com.memoria.caregiver.ui.components.NemaraToggle
 import com.memoria.caregiver.ui.theme.Action
 import com.memoria.caregiver.ui.theme.ActionSoft
 import com.memoria.caregiver.ui.theme.Danger
+import com.memoria.caregiver.ui.components.InfoDot
 import com.memoria.caregiver.ui.theme.Ink
 import com.memoria.caregiver.ui.theme.Ink3
 import com.memoria.caregiver.ui.theme.NemaraType
@@ -85,32 +86,32 @@ fun DataCollectionCard(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(3.dp),
                 ) {
-                    Text(
-                        text = "Contribute recordings to research",
-                        style = NemaraType.bodySemibold,
-                        color = Ink,
-                    )
-                    // Cameras in private rooms are excluded from research clips
-                    // server-side (per-camera privacy), so the toggle is never
-                    // locked by a patient-level privacy flag.
-                    //
-                    // The on/off copy differs by one word — "is securely
-                    // storing" vs "will securely store". Present tense once it
-                    // is actually happening.
-                    Text(
-                        text = if (enabled) {
-                            "Memoria is securely storing video and audio clips of $name " +
-                                "to help improve our understanding of elderly health and " +
-                                "disease."
-                        } else {
-                            "Memoria will securely store video and audio clips of $name " +
-                                "to help improve our understanding of elderly health and " +
-                                "disease."
-                        },
-                        style = NemaraType.caption,
-                        color = Ink3,
-                        lineHeight = CaptionLineHeight,
-                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "Contribute recordings to research",
+                            style = NemaraType.bodySemibold,
+                            color = Ink,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                        // Cameras in private rooms are excluded from research
+                        // clips server-side (per-camera privacy), so the toggle
+                        // is never locked by a patient-level privacy flag —
+                        // which is why the exclusion is stated here rather than
+                        // implied by a disabled control.
+                        //
+                        // The tense distinction the old caption carried ("is
+                        // storing" vs "will store") is gone with it. The toggle
+                        // beside this says which of the two it is, and iOS
+                        // dropped it for the same reason.
+                        InfoDot(
+                            "Securely stores video and audio clips to help improve " +
+                                "understanding of elderly health. Private-room cameras " +
+                                "are always excluded.",
+                        )
+                    }
                 }
 
                 NemaraToggle(

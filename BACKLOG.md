@@ -16,7 +16,7 @@ settles the pin question — the port re-syncs to iOS `main` rather than holding
 
 ---
 
-## A. iOS re-sync — 31 commits since the pin
+## A. iOS re-sync — 31 commits since the pin — **COMPLETE**
 
 Pin was `a6c27f6`. iOS `main` is now `2a84e0a`. 21 files, +698 −128.
 
@@ -33,7 +33,7 @@ decodes through them.
 | A6 | Wandering room match case-insensitive; duplicate room names blocked at creation | `6065961` | S | **DONE** — 8 tests. `whereScope` fallback deliberately NOT ported, see below |
 | A7 | **`HomeStatusView` (+347)** — AI briefing, per-person verdict fold, triage-sorted roster, streaks | `5a11ae7` … `c934fcd` | **L** | **DONE** — logic (26 tests, mutation-checked) + screen + state (12 tests). **One piece deliberately deferred: the 3-mode presence suffix** — `lastPresence` is ported and unused, see below. **Diff pin→HEAD, do not walk the commits**: this span rewrites itself repeatedly (`1454ed8` removed Recent Moments, `fa1c7af`/`e081e46` reworked the blind card, `86d43bc`/`c617ef4`/`7003a95` each restyled the previous one). Walking it would mean building four designs that were discarded. |
 | A8 | Events: 12-hour AM/PM times, weekday dropped, SAFETY/ROUTINE/CUSTOM pills removed | `9d12c07`, `daf1063` | S | **DONE** |
-| A9 | Declutter passes 1–3: `InfoDot` component, eyebrows and captions removed across sensors / events / settings | `18123ac`, `07c901b`, `d031a09`, `566153c` | M | not started |
+| A9 | Declutter passes 1–3: `InfoDot` component, eyebrows and captions removed across sensors / events / settings | `18123ac`, `07c901b`, `d031a09`, `566153c` | M | **DONE** — component + 4 settings cards; two Android-only captions deliberately kept visible (DIFFERENCES D18) |
 
 **A7's one gap: the presence suffix.** iOS appends a clause to each quiet
 person's fact line — "camera is on but AI is paused", "no one in view for about

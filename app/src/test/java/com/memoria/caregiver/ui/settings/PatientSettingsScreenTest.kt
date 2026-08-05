@@ -2,8 +2,13 @@ package com.memoria.caregiver.ui.settings
 
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import com.memoria.caregiver.analytics.LocalAnalytics
@@ -147,9 +152,16 @@ class PatientSettingsScreenTest {
     fun `absent audio capture reads as on`() {
         setUp(PatientSettingsState(patient = peggy.copy(audioCaptureEnabled = null)))
 
-        compose.onNodeWithText(
-            "Cameras capture sound for live audio, clips, and speech alerts.",
-        ).assertExists()
+        // Asserted on the CONTROL, not on the caption beside it.
+        //
+        // This used to look for the "cameras capture sound…" sentence, which
+        // the July declutter moved behind an ⓘ. Reading state off prose was
+        // always the weaker test — the toggle is what the caregiver acts on,
+        // and it is what has to be right.
+        // Selected by the toggle's own id. There are four switches on this
+        // screen and none carries a visible title, so "the switch" would work
+        // until the fifth one arrived and then target the wrong control.
+        compose.onNodeWithTag("audio_capture.toggle").performScrollTo().assertIsOn()
     }
 
     // ---- identity card ----
