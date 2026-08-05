@@ -116,6 +116,7 @@ class PatientSettingsViewModel(
         val isDeleting: Boolean = false,
         val audioCapture: CardMutationState = CardMutationState(),
         val dataCollection: CardMutationState = CardMutationState(),
+        val evaluationMode: CardMutationState = CardMutationState(),
         val emailAlerts: EmailAlertsState = EmailAlertsState(),
     )
 
@@ -370,6 +371,20 @@ class PatientSettingsViewModel(
      * Success is what takes the consent sheet down: a decision was recorded, so
      * the prompt has nothing left to ask. A failure deliberately leaves it up.
      */
+    /**
+     * Evaluation mode. Unlike data collection there is no consent sheet to
+     * dismiss on success: the setting is ON by default and the explainer is
+     * always reachable from the card's info button, so a flip is just a flip.
+     */
+    fun setEventGateEnabled(enabled: Boolean) {
+        runCardMutation(
+            read = { it.evaluationMode },
+            write = { local, mutation -> local.copy(evaluationMode = mutation) },
+            failure = { messageFor(it) },
+            body = UpdatePatientRequest(eventGateEnabled = enabled),
+        )
+    }
+
     fun setDataCollectionEnabled(enabled: Boolean) {
         runCardMutation(
             read = { it.dataCollection },

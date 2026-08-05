@@ -48,6 +48,7 @@ data class PatientSettingsState(
 
     val audioCapture: CardMutationState = CardMutationState(),
     val dataCollection: CardMutationState = CardMutationState(),
+    val evaluationMode: CardMutationState = CardMutationState(),
     val emailAlerts: EmailAlertsState = EmailAlertsState(),
 )
 

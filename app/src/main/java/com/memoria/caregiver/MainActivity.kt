@@ -652,6 +652,7 @@ private fun PatientTabs(
                 onPeopleBlurChange = patientSettingsViewModel::setPeopleBlur,
                 onAudioCaptureChange = patientSettingsViewModel::setAudioCapture,
                 onDataCollectionChange = patientSettingsViewModel::setDataCollectionEnabled,
+                onEvaluationModeChange = patientSettingsViewModel::setEventGateEnabled,
                 onRemovePatient = patientSettingsViewModel::deletePatient,
                 onPickPhoto = pickPhoto,
                 onEnroll = {

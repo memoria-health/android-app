@@ -141,6 +141,13 @@ data class Patient(
     // rather than "whatever the server would have said".
     @SerialName("data_collection_enabled") val dataCollectionEnabled: Boolean = false,
     /**
+     * Evaluation mode: a Memoria specialist checks alerts before the family
+     * is told. ON by default, so unlike [dataCollectionEnabled] an absent
+     * value defaults to TRUE — a backend older than this field must not make
+     * the app tell a caregiver the check is off when it is running.
+     */
+    @SerialName("event_gate_enabled") val eventGateEnabled: Boolean = true,
+    /**
      * When the caregiver first made a data-collection decision (Share or Not
      * now). Null means never asked, so show the first-open consent sheet.
      * Non-null means decided, so never auto-prompt again. Server-stamped on any
@@ -345,6 +352,9 @@ data class UpdatePatientRequest(
     @SerialName("data_collection_enabled")
     @EncodeDefault(EncodeDefault.Mode.NEVER)
     val dataCollectionEnabled: Boolean? = null,
+    @SerialName("event_gate_enabled")
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val eventGateEnabled: Boolean? = null,
 )
 
 /**

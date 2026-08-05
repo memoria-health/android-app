@@ -100,6 +100,7 @@ fun PatientSettingsScreen(
     onPeopleBlurChange: (Boolean) -> Unit,
     onAudioCaptureChange: (Boolean) -> Unit,
     onDataCollectionChange: (Boolean) -> Unit,
+    onEvaluationModeChange: (Boolean) -> Unit,
     onOpenFeedback: () -> Unit,
     onRemovePatient: () -> Unit,
     modifier: Modifier = Modifier,
@@ -152,6 +153,12 @@ fun PatientSettingsScreen(
             audioCaptureEnabled = state.patient?.audioCaptureEnabled,
             audioCapture = state.audioCapture,
             onAudioCaptureChange = onAudioCaptureChange,
+        )
+
+        EvaluationModeCard(
+            patient = state.patient,
+            mutation = state.evaluationMode,
+            onEnabledChange = onEvaluationModeChange,
         )
 
         DataCollectionCard(
