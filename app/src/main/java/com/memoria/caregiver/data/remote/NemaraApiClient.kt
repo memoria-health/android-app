@@ -67,6 +67,13 @@ class NemaraApiClient(
     /** Token minting, talk start/end and clip capture. No cached state. */
     internal val liveKit: LiveKitApi = LiveKitApi(http)
 
+    /**
+     * The Home briefing's three calls. Deliberately not wrapped by a cached
+     * accessor on this client: none of them has a cache, every one is allowed
+     * to fail, and the Home screen owns the fallback chain.
+     */
+    internal val home: HomeApi = HomeApi(http)
+
     /** Face embeddings, device tokens and feedback. No cached state. */
     internal val enrollment: EnrollmentApi = EnrollmentApi(http)
 

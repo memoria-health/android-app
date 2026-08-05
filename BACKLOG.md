@@ -27,11 +27,11 @@ decodes through them.
 |---|---|---|---|---|
 | A1 | **Tolerant decode: Patient, Detector** — required fields that a slightly older backend does not send kill **sign-in**, not one screen | `954dd14`, `0d68af6` | S | **DONE** — F-43, 8 tests |
 | A2 | Sign-in no longer blocks on Realtime channel subscribes | `7842202` | S | **ALREADY DONE** — verified: `openChannelsDetached()` is `scope.launch`, poll starts alongside, and the comment cites the same 2026-07-28 incident |
-| A3 | `NemaraAPIClient` +93 — home-briefing / home-report / presence endpoints | `5a11ae7`, `cac2833`, `9ce516a` | M | **NEXT**, together with A7 — endpoints with no consumer would be another built-but-unreachable surface |
+| A3 | `NemaraAPIClient` +93 — home-briefing / home-report / presence endpoints | `5a11ae7`, `cac2833`, `9ce516a` | M | **DONE** — `HomeApi.kt`; all three verified to exist and be mounted on the backend before porting a client |
 | A4 | Wandering `whereRooms`: the detector picks which cameras it watches (the sheet that SETS the rooms) | `41a7efa` | M | **DONE** — 6 tests |
 | A5 | Exit-door setup appears **only** on cameras the wandering detector watches | `e95c19f` | S | **DONE** — 9 tests |
 | A6 | Wandering room match case-insensitive; duplicate room names blocked at creation | `6065961` | S | **DONE** — 8 tests. `whereScope` fallback deliberately NOT ported, see below |
-| A7 | **`HomeStatusView` (+347)** — AI briefing, per-person verdict fold, triage-sorted roster, streaks, 3-mode presence | `5a11ae7` … `c934fcd` | **L** | not started. **Diff pin→HEAD, do not walk the commits**: this span rewrites itself repeatedly (`1454ed8` removed Recent Moments, `fa1c7af`/`e081e46` reworked the blind card, `86d43bc`/`c617ef4`/`7003a95` each restyled the previous one). Walking it would mean building four designs that were discarded. |
+| A7 | **`HomeStatusView` (+347)** — AI briefing, per-person verdict fold, triage-sorted roster, streaks, 3-mode presence | `5a11ae7` … `c934fcd` | **L** | **logic DONE** (`ui/home/HomeStatus.kt`, 26 tests, mutation-checked); the screen itself is next. **Diff pin→HEAD, do not walk the commits**: this span rewrites itself repeatedly (`1454ed8` removed Recent Moments, `fa1c7af`/`e081e46` reworked the blind card, `86d43bc`/`c617ef4`/`7003a95` each restyled the previous one). Walking it would mean building four designs that were discarded. |
 | A8 | Events: 12-hour AM/PM times, weekday dropped, SAFETY/ROUTINE/CUSTOM pills removed | `9d12c07`, `daf1063` | S | not started |
 | A9 | Declutter passes 1–3: `InfoDot` component, eyebrows and captions removed across sensors / events / settings | `18123ac`, `07c901b`, `d031a09`, `566153c` | M | not started |
 
