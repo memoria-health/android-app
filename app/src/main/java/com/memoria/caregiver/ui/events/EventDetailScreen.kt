@@ -45,12 +45,10 @@ import com.memoria.caregiver.ui.theme.Line
 import com.memoria.caregiver.ui.theme.NemaraType
 import com.memoria.caregiver.ui.theme.Paper
 import com.memoria.caregiver.ui.theme.Radius
-import com.memoria.caregiver.ui.theme.Sky
-import com.memoria.caregiver.ui.theme.SkySoft
 import com.memoria.caregiver.ui.theme.Spacing
-import com.memoria.caregiver.ui.theme.Terra
 import com.memoria.caregiver.ui.theme.TerraInk
-import com.memoria.caregiver.ui.theme.TerraSoft
+import com.memoria.caregiver.ui.theme.soft
+import com.memoria.caregiver.ui.theme.accent
 
 /**
  * Step 1 of 2 of the review flow: the title block, the archived clip, and
@@ -91,9 +89,8 @@ fun EventDetailScreen(
     // arriving while the sheet is open — is a new composition and logs again.
     val event = state.event
 
-    val isSafety = event.category == Detector.Category.SAFETY
-    val tone = if (isSafety) Terra else Sky
-    val toneSoft = if (isSafety) TerraSoft else SkySoft
+    val tone = event.category.accent
+    val toneSoft = event.category.soft
 
     // Deliberately a plain `remember`, deliberately KEYED ON THE EVENT ID, and
     // deliberately not hoisted into EventDetailState. The dignity cover must be

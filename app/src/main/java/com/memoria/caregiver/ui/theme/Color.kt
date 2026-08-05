@@ -52,6 +52,16 @@ val ActionInk = Color(0xFFFBF8F0)
 val Sky = Color(0xFF6B8AA0)
 val SkySoft = Color(0xFFDDE6EE)
 
+// Behaviour · plum.  Care · sage.
+// Muted to the same register as Terra and Sky: four category hues must read
+// as one family, not one shouting colour and three quiet ones. Identical
+// hexes to the iOS asset catalog and the web tokens so a category looks the
+// same on every surface.
+val Plum = Color(0xFF8A6E96)
+val PlumSoft = Color(0xFFE8E0EC)
+val Sage = Color(0xFF6E9070)
+val SageSoft = Color(0xFFDFEADF)
+
 // ---- Semantic ----
 val Success = Color(0xFF22C55E)
 val Warning = Color(0xFFF59E0B)

@@ -73,11 +73,13 @@ import com.memoria.caregiver.ui.theme.NemaraType
 import com.memoria.caregiver.ui.theme.Paper
 import com.memoria.caregiver.ui.theme.PaperDim
 import com.memoria.caregiver.ui.theme.Radius
-import com.memoria.caregiver.ui.theme.Sky
-import com.memoria.caregiver.ui.theme.SkySoft
 import com.memoria.caregiver.ui.theme.Terra
 import com.memoria.caregiver.ui.theme.TerraSoft
 import java.time.LocalTime
+import com.memoria.caregiver.ui.theme.soft
+import com.memoria.caregiver.ui.theme.accent
+import com.memoria.caregiver.ui.theme.displayName
+import com.memoria.caregiver.ui.theme.SELECTABLE_CATEGORIES
 
 /**
  * Two-stage custom-detector creation.
@@ -461,23 +463,21 @@ private fun InferredSection(
 
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             NemaraEyebrow("CATEGORY")
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                CategoryCard(
-                    label = "Safety",
-                    tone = Terra,
-                    soft = TerraSoft,
-                    selected = state.category == Detector.Category.SAFETY,
-                    onSelect = { onCategoryChange(Detector.Category.SAFETY) },
-                    modifier = Modifier.weight(1f),
-                )
-                CategoryCard(
-                    label = "Routine",
-                    tone = Sky,
-                    soft = SkySoft,
-                    selected = state.category == Detector.Category.ROUTINE,
-                    onSelect = { onCategoryChange(Detector.Category.ROUTINE) },
-                    modifier = Modifier.weight(1f),
-                )
+            // 2x2 rather than one row: four cards side by side on a phone
+            // leaves each too narrow to read or tap comfortably.
+            SELECTABLE_CATEGORIES.chunked(2).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    row.forEach { category ->
+                        CategoryCard(
+                            label = category.displayName,
+                            tone = category.accent,
+                            soft = category.soft,
+                            selected = state.category == category,
+                            onSelect = { onCategoryChange(category) },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
             }
         }
 

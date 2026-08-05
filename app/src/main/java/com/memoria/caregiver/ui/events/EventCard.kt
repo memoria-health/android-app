@@ -36,11 +36,9 @@ import com.memoria.caregiver.ui.theme.Ink2
 import com.memoria.caregiver.ui.theme.Ink3
 import com.memoria.caregiver.ui.theme.NemaraType
 import com.memoria.caregiver.ui.theme.Radius
-import com.memoria.caregiver.ui.theme.Sky
-import com.memoria.caregiver.ui.theme.SkySoft
-import com.memoria.caregiver.ui.theme.Terra
-import com.memoria.caregiver.ui.theme.TerraSoft
 import kotlinx.coroutines.delay
+import com.memoria.caregiver.ui.theme.soft
+import com.memoria.caregiver.ui.theme.accent
 
 /**
  * One row in the Events list. Spec: `Features/Patient/Events/EventCard.swift`,
@@ -59,12 +57,13 @@ fun EventCard(
     event: DetectionEvent,
     modifier: Modifier = Modifier,
 ) {
-    val isSafety = event.category == Detector.Category.SAFETY
-    val cardBackground = if (isSafety) TerraSoft else SkySoft
+    val cardBackground = event.category.soft
     // Still used, and now the ONLY thing carrying category: it tints the glyph.
     // That is the whole argument for dropping the pills — the type was already
-    // being said twice.
-    val categoryBadgeColor = if (isSafety) Terra else Sky
+    // being said twice. With four categories the glyph tint is doing more work
+    // than it did with two, which is exactly why it must never be the sole
+    // signal — the detector's own icon shape carries it too.
+    val categoryBadgeColor = event.category.accent
 
     // SwiftUI's `.opacity(...)` on a container applies to each LEAF, not to the
     // flattened group, unless `.compositingGroup()` intervenes — and

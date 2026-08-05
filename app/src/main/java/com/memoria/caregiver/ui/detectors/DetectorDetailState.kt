@@ -6,6 +6,7 @@ import java.util.Locale
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.ExperimentalTime
+import com.memoria.caregiver.ui.theme.displayName
 
 /**
  * State for the detector detail editor, and every piece of its logic that does
@@ -478,11 +479,13 @@ const val ALL_ROOMS: String = "ALL ROOMS"
 const val PREVIEW_FAILURE_MESSAGE: String = "Couldn't preview that. Please try again."
 const val SAVE_FAILURE_MESSAGE: String = "Couldn't save that. Please try again."
 
-/** The chip label for a category. iOS: `categoryLabel(_:)`. */
-fun categoryLabel(category: Detector.Category): String = when (category) {
-    Detector.Category.SAFETY -> "Safety"
-    Detector.Category.ROUTINE -> "Routine"
-}
+/**
+ * The chip label for a category. iOS: `categoryLabel(_:)`.
+ *
+ * Delegates to the palette rather than keeping a second list — this `when`
+ * is exactly what went stale when Behaviour and Care were added.
+ */
+fun categoryLabel(category: Detector.Category): String = category.displayName
 
 /**
  * The line under the sensitivity chips. iOS: `sensitivityHint`.

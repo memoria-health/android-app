@@ -607,12 +607,35 @@ data class Detector(
     @SerialName("updated_at") val updatedAt: Instant,
 ) {
     @Serializable
+    /**
+     * What KIND of thing a detector watches for. SEMANTIC ONLY.
+     *
+     * Category decides how loudly we PRESENT something, never how hard we
+     * look for it — the backend keys detection strictness off `severity`.
+     * SAFETY is the only category that escalates a patient card, and that
+     * is deliberate: a red card that fires for everything trains people to
+     * ignore it.
+     *
+     * UNKNOWN absorbs a value from a newer server. Without it the whole
+     * response fails to deserialize and the screen blanks, which is a far
+     * worse outcome than one unfamiliar label.
+     */
+    @Serializable
     enum class Category(val wire: String) {
         @SerialName("safety")
         SAFETY("safety"),
 
         @SerialName("routine")
         ROUTINE("routine"),
+
+        @SerialName("behaviour")
+        BEHAVIOUR("behaviour"),
+
+        @SerialName("care")
+        CARE("care"),
+
+        @SerialName("unknown")
+        UNKNOWN("unknown"),
     }
 
     @Serializable

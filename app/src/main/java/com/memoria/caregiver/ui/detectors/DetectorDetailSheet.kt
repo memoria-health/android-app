@@ -88,6 +88,7 @@ import com.memoria.caregiver.ui.theme.TerraInk
 import com.memoria.caregiver.ui.theme.TerraSoft
 import com.memoria.caregiver.ui.theme.Warning
 import java.time.LocalTime
+import com.memoria.caregiver.ui.theme.SELECTABLE_CATEGORIES
 
 /**
  * What a detector actually does, in the caregiver's language, and a way to
@@ -638,7 +639,7 @@ private fun CategoryCard(staged: StagedEdits, onStagedChange: (StagedEdits) -> U
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         NemaraEyebrow("CATEGORY")
         FlowChips {
-            listOf(Detector.Category.SAFETY, Detector.Category.ROUTINE).forEach { category ->
+            SELECTABLE_CATEGORIES.forEach { category ->
                 Chip(
                     label = categoryLabel(category),
                     selected = staged.category == category,

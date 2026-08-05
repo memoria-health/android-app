@@ -39,13 +39,11 @@ import com.memoria.caregiver.ui.theme.Ink3
 import com.memoria.caregiver.ui.theme.Line
 import com.memoria.caregiver.ui.theme.NemaraType
 import com.memoria.caregiver.ui.theme.Radius
-import com.memoria.caregiver.ui.theme.Sky
-import com.memoria.caregiver.ui.theme.SkySoft
 import com.memoria.caregiver.ui.theme.Success
 import com.memoria.caregiver.ui.theme.Terra
-import com.memoria.caregiver.ui.theme.TerraDeep
-import com.memoria.caregiver.ui.theme.TerraSoft
 import com.memoria.caregiver.ui.theme.Warning
+import com.memoria.caregiver.ui.theme.deep
+import com.memoria.caregiver.ui.theme.soft
 
 /**
  * One row in the patient's detector list: icon tile, name, description, a
@@ -182,8 +180,7 @@ const val DetectorRowMenuTestTag: String = "detector.row.menu"
  */
 @Composable
 private fun CategoryIconTile(detector: Detector) {
-    val isSafety = detector.category == Detector.Category.SAFETY
-    val fill = if (isSafety) TerraSoft else SkySoft
+    val fill = detector.category.soft
     Box(
         modifier = Modifier.size(32.dp).clip(RoundedCornerShape(9.dp)).background(fill),
         contentAlignment = Alignment.Center,
@@ -191,7 +188,7 @@ private fun CategoryIconTile(detector: Detector) {
         NemaraGlyph(
             symbol = detector.iconName,
             size = 14.dp,
-            color = if (isSafety) TerraDeep else Sky,
+            color = detector.category.deep,
             hole = fill,
         )
     }

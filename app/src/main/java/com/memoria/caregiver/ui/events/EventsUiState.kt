@@ -205,8 +205,13 @@ data class EventReviewState(
  */
 internal fun reviewSubjectQuestion(event: DetectionEvent): String =
     when (event.category) {
-        Detector.Category.SAFETY -> "Was this a real ${event.title.lowercase()}?"
-        Detector.Category.ROUTINE -> "Was this the right thing to flag?"
+        // Safety and Behaviour name a specific thing that either happened or
+        // did not, so "was this real?" is the useful question. Routine and
+        // Care are about whether something was worth surfacing at all —
+        // "was this a real company at meals?" is not a sentence anyone says.
+        Detector.Category.SAFETY, Detector.Category.BEHAVIOUR ->
+            "Was this a real ${event.title.lowercase()}?"
+        else -> "Was this the right thing to flag?"
     }
 
 /**
@@ -224,11 +229,13 @@ internal fun reviewChoiceSubtext(
 ): String = when (choice) {
     DetectionEvent.ReviewChoice.UNSURE -> "Hard to tell from the clip."
     DetectionEvent.ReviewChoice.CORRECT -> when (event.category) {
-        Detector.Category.SAFETY -> "Yes, that was a real ${event.title.lowercase()}."
-        Detector.Category.ROUTINE -> "Yes, that's the right thing to flag."
+        Detector.Category.SAFETY, Detector.Category.BEHAVIOUR ->
+            "Yes, that was a real ${event.title.lowercase()}."
+        else -> "Yes, that's the right thing to flag."
     }
     DetectionEvent.ReviewChoice.WRONG -> when (event.category) {
-        Detector.Category.SAFETY -> "It wasn't a ${event.title.lowercase()}."
-        Detector.Category.ROUTINE -> "We shouldn't have flagged this."
+        Detector.Category.SAFETY, Detector.Category.BEHAVIOUR ->
+            "It wasn't a ${event.title.lowercase()}."
+        else -> "We shouldn't have flagged this."
     }
 }

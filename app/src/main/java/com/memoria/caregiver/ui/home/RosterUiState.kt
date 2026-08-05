@@ -5,6 +5,7 @@ import com.memoria.caregiver.data.model.DetectionEvent
 import com.memoria.caregiver.data.remote.HomeReport
 import com.memoria.caregiver.data.model.Detector
 import com.memoria.caregiver.data.model.Patient
+import com.memoria.caregiver.ui.theme.escalates
 
 /**
  * The state the Home tab renders from, and the derivations it needs.
@@ -178,4 +179,4 @@ internal fun patientRowStatusText(unopenedCount: Int): String {
 internal fun patientRowHasUnopenedSafety(
     unopened: List<DetectionEvent>,
     isPaused: Boolean,
-): Boolean = !isPaused && unopened.any { it.category == Detector.Category.SAFETY }
+): Boolean = !isPaused && unopened.any { it.category.escalates }
