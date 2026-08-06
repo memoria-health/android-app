@@ -33,27 +33,14 @@ import com.memoria.caregiver.ui.theme.Terra
  * motion) and is server-computed per detector. This one is about the DETECTOR
  * being newly generated from a sentence the caregiver typed, which we have
  * never evaluated. A detector can be both, so the two may appear together.
- *
- * `compact` is the one-line caption for dense lists; the full notice is the
- * default (create review + detail sheet).
  */
 @Composable
-fun CustomDetectorBetaNotice(
-    modifier: Modifier = Modifier,
-    compact: Boolean = false,
-) {
+fun CustomDetectorBetaNotice(modifier: Modifier = Modifier) {
     Row(
         modifier = modifier
-            .then(
-                if (compact) {
-                    Modifier
-                } else {
-                    Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(Terra.copy(alpha = 0.12f))
-                        .padding(12.dp)
-                }
-            )
+            .clip(RoundedCornerShape(10.dp))
+            .background(Terra.copy(alpha = 0.12f))
+            .padding(12.dp)
             .fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.Top,
@@ -62,31 +49,15 @@ fun CustomDetectorBetaNotice(
             symbol = "exclamationmark.triangle.fill",
             size = 13.dp,
             color = Terra,
-            // Triangle, not the circle its sibling uses, so the two
-            // notices are distinguishable at a glance when a detector
-            // is both custom and fine-detail.
-            hole = if (compact) Card else AmberWashBeta,
+            // Triangle, not the circle its sibling uses, so the two notices
+            // are distinguishable when a detector is both custom and
+            // fine-detail.
+            hole = AmberWashBeta,
             modifier = Modifier.padding(top = 1.dp),
         )
-        Text(
-            text = if (compact) CustomBetaShort else CustomBetaFull,
-            style = NemaraType.caption,
-            color = if (compact) Terra else Ink2,
-        )
+        Text(text = CustomBetaCopy, style = NemaraType.caption, color = Ink2)
     }
 }
-
-/** `warning` at 12% flattened onto `Card`, matching [AccuracyCaveatNotice]. */
-private val AmberWashBeta = Terra.copy(alpha = 0.12f).compositeOver(Card)
-
-internal const val CustomBetaFull: String =
-    "Custom detectors are in beta. This one was built from your own " +
-        "description, so it has not been tested the way our built-in " +
-        "detectors have and its accuracy can vary. Treat any alert as a " +
-        "reason to check in rather than something to rely on."
-
-internal const val CustomBetaShort: String =
-    "Beta. Built from your description, so accuracy can vary."
 
 /**
  * Larger BETA badge for sticking onto a button. [NemaraChip] is 9sp mono,
@@ -110,3 +81,13 @@ fun BetaBadge(modifier: Modifier = Modifier) {
             .semantics { contentDescription = "Beta feature" },
     )
 }
+
+/**
+ * `terra` at 12% flattened onto `Card`. The glyph's bang is knocked out of the
+ * triangle rather than drawn on it, so it has to be painted in the notice's own
+ * background: a translucent colour there would let the triangle show through.
+ */
+private val AmberWashBeta = Terra.copy(alpha = 0.12f).compositeOver(Card)
+
+internal const val CustomBetaCopy: String =
+    "Custom detectors are in beta. Built from your description, so accuracy can vary."
