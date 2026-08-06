@@ -162,6 +162,7 @@ fun DetectorDetailSheet(
             HeaderRow(state.detector)
             state.error?.let { ErrorBanner(it) }
             if (state.detector.showsAccuracyCaveat) AccuracyCaveatNotice()
+            if (state.isCustom) CustomDetectorBetaNotice()
             if (!state.detector.isOn) DraftBanner(onTurnOn)
             if (state.isCustom) AskedForCard(state.detector.customPrompt)
             CriteriaCard(state)
