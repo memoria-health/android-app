@@ -2,11 +2,13 @@ package com.memoria.caregiver.ui.detectors
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -101,29 +103,27 @@ fun PatientDetectorsScreen(
         // Both add buttons sit at the TOP, unlike the Cameras tab's single one
         // at the bottom: a patient can have 15+ detectors, and the Swift moved
         // these up so adding another does not mean scrolling past all of them.
-        // The BETA marker lives HERE and on the CUSTOM section header, not on
-        // each row. Per-row it repeated the same thing on every custom
-        // detector. iOS carries the identical treatment.
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.md),
-            horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            NemaraChip(text = "BETA", tone = NemaraChipTone.Terra)
-            Text(
-                text = "Custom detectors are new, so accuracy can vary.",
-                style = NemaraType.caption,
-                color = Ink3,
+        // The BETA marker is stuck ONTO this button rather than sitting on
+        // its own line, and repeats on the CUSTOM section header. Per-row it
+        // repeated the same thing on every custom detector. iOS matches.
+        Box(modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.md)) {
+            NemaraButton(
+                title = "Add a custom detector",
+                variant = NemaraButtonVariant.Secondary,
+                block = true,
+                icon = PlusVector,
+                onClick = onAddCustomDetector,
+            )
+            // Offset so it straddles the corner like a sticker, matching the
+            // iOS overlay's (6, -9).
+            NemaraChip(
+                text = "BETA",
+                tone = NemaraChipTone.Terra,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .offset(x = 6.dp, y = (-9).dp),
             )
         }
-        NemaraButton(
-            title = "Add a custom detector",
-            variant = NemaraButtonVariant.Secondary,
-            block = true,
-            icon = PlusVector,
-            onClick = onAddCustomDetector,
-            modifier = Modifier.padding(horizontal = Spacing.md),
-        )
         NemaraButton(
             title = "Add from detection library",
             variant = NemaraButtonVariant.Secondary,
