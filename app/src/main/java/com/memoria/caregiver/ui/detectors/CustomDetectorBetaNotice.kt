@@ -16,6 +16,11 @@ import androidx.compose.ui.unit.dp
 import com.memoria.caregiver.ui.theme.Card
 import com.memoria.caregiver.ui.theme.Ink2
 import com.memoria.caregiver.ui.theme.NemaraType
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import com.memoria.caregiver.ui.theme.TerraInk
 import com.memoria.caregiver.ui.theme.Terra
 
 /**
@@ -82,3 +87,26 @@ internal const val CustomBetaFull: String =
 
 internal const val CustomBetaShort: String =
     "Beta. Built from your description, so accuracy can vary."
+
+/**
+ * Larger BETA badge for sticking onto a button. [NemaraChip] is 9sp mono,
+ * which disappears at that size against a full-width control, so this is its
+ * own thing rather than a chip with a bigger font. iOS: `BetaBadge`.
+ */
+@Composable
+fun BetaBadge(modifier: Modifier = Modifier) {
+    Text(
+        text = "BETA",
+        style = NemaraType.caption.copy(
+            fontSize = 11.sp,
+            fontWeight = FontWeight.ExtraBold,
+            letterSpacing = 0.8.sp,
+        ),
+        color = TerraInk,
+        modifier = modifier
+            .clip(RoundedCornerShape(percent = 50))
+            .background(Terra)
+            .padding(horizontal = 9.dp, vertical = 4.dp)
+            .semantics { contentDescription = "Beta feature" },
+    )
+}

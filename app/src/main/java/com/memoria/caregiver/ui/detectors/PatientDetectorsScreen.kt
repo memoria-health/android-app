@@ -114,14 +114,12 @@ fun PatientDetectorsScreen(
                 icon = PlusVector,
                 onClick = onAddCustomDetector,
             )
-            // Offset so it straddles the corner like a sticker, matching the
-            // iOS overlay's (6, -9).
-            NemaraChip(
-                text = "BETA",
-                tone = NemaraChipTone.Terra,
+            // Sits ON the top edge, inset from the corner rather than
+            // hanging off it. Matches the iOS overlay's (-14, -11).
+            BetaBadge(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .offset(x = 6.dp, y = (-9).dp),
+                    .offset(x = (-14).dp, y = (-11).dp),
             )
         }
         NemaraButton(

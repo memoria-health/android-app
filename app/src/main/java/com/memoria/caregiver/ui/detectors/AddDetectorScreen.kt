@@ -135,6 +135,8 @@ fun AddDetectorScreen(
                 .pointerInput(Unit) { detectTapGestures { focusManager.clearFocus() } }
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp)
+                // The eyebrow used to butt straight up against the header.
+                .padding(top = 22.dp)
                 .padding(bottom = 20.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
@@ -236,13 +238,16 @@ private fun Intro() {
             color = Ink,
         )
         Text(
-            text = "Describe it in plain words. Memoria figures out the rest — " +
-                "including whether it's a live alert or a daily/weekly check.",
+            text = "Describe it in plain words. Memoria figures out the rest, " +
+                "including whether it's a live alert or a daily or weekly check.",
             style = NemaraType.bodySmall,
             color = Ink2,
             // iOS: .lineSpacing(2) on 13pt — 13 * 1.21 + 2.
             lineHeight = 17.7.sp,
         )
+        // The full reasoning belongs HERE, at the moment someone is about to
+        // create one, rather than as a caption on a badge.
+        CustomDetectorBetaNotice(modifier = Modifier.padding(top = 6.dp))
     }
 }
 
