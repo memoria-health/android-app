@@ -286,9 +286,15 @@ private fun CameraCarousel(
                     camera = camera,
                     modifier = Modifier
                         .fillMaxWidth()
-                        // Headroom for the page-dot indicator, so the dots never
-                        // sit on the video.
-                        .padding(bottom = PageDotPadding),
+                        // Headroom for the page-dot indicator, and ONLY when
+                        // the dots are actually drawn (`online.size > 1`,
+                        // same test as below). With a single camera this was
+                        // 32dp of dead space inside a fixed-height Box, which
+                        // read as a large gap between the feed and the
+                        // sensors card underneath. iOS carries the same fix.
+                        .padding(
+                            bottom = if (online.size > 1) PageDotPadding else 0.dp
+                        ),
                     onToggleAudio = onToggleAudio,
                     onExpandCamera = onExpandCamera,
                     onCallButtonTap = onCallButtonTap,

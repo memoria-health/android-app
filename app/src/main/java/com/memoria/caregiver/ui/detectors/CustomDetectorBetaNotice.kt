@@ -12,14 +12,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.compositeOver
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.memoria.caregiver.ui.theme.Card
 import com.memoria.caregiver.ui.theme.Ink2
 import com.memoria.caregiver.ui.theme.NemaraType
-import com.memoria.caregiver.ui.theme.Warning
+import com.memoria.caregiver.ui.theme.Terra
 
 /**
  * Beta marker for CUSTOM detectors — the ones a caregiver wrote themselves, as
@@ -48,7 +45,7 @@ fun CustomDetectorBetaNotice(
                 } else {
                     Modifier
                         .clip(RoundedCornerShape(10.dp))
-                        .background(Warning.copy(alpha = 0.12f))
+                        .background(Terra.copy(alpha = 0.12f))
                         .padding(12.dp)
                 }
             )
@@ -59,7 +56,7 @@ fun CustomDetectorBetaNotice(
         NemaraGlyph(
             symbol = "exclamationmark.triangle.fill",
             size = 13.dp,
-            color = Warning,
+            color = Terra,
             // Triangle, not the circle its sibling uses, so the two
             // notices are distinguishable at a glance when a detector
             // is both custom and fine-detail.
@@ -69,28 +66,13 @@ fun CustomDetectorBetaNotice(
         Text(
             text = if (compact) CustomBetaShort else CustomBetaFull,
             style = NemaraType.caption,
-            color = if (compact) Warning else Ink2,
+            color = if (compact) Terra else Ink2,
         )
     }
 }
 
-/** The small BETA chip that sits beside a custom detector's name. */
-@Composable
-fun BetaChip(modifier: Modifier = Modifier) {
-    Text(
-        text = "BETA",
-        style = NemaraType.caption.copy(fontSize = 9.sp),
-        color = Warning,
-        modifier = modifier
-            .clip(RoundedCornerShape(4.dp))
-            .background(Warning.copy(alpha = 0.14f))
-            .padding(horizontal = 5.dp, vertical = 2.dp)
-            .semantics { contentDescription = "Beta detector" },
-    )
-}
-
 /** `warning` at 12% flattened onto `Card`, matching [AccuracyCaveatNotice]. */
-private val AmberWashBeta = Warning.copy(alpha = 0.12f).compositeOver(Card)
+private val AmberWashBeta = Terra.copy(alpha = 0.12f).compositeOver(Card)
 
 internal const val CustomBetaFull: String =
     "Custom detectors are in beta. This one was built from your own " +

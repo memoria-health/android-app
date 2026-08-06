@@ -363,20 +363,18 @@ internal data class SensitiveRoomCopy(
 )
 
 /**
- * Copy adapts to whether the classifier's room call is known. Both sentences are
- * carried verbatim; the difference is "looks like it's in" versus "is in", which
- * is the difference between a guess and a fact and must not be flattened.
+ * Copy adapts to whether the classifier's room call is a guess or a fact. That
+ * distinction must not be flattened, but it no longer needs a sentence of its
+ * own: "Detected automatically" carries it. The old body opened by restating
+ * the title ("this camera is in a private room"), which is what made the card
+ * read long.
  */
 internal fun sensitiveRoomCopy(camera: Camera): SensitiveRoomCopy = SensitiveRoomCopy(
     title = "${camera.room} is a private room",
     body = if (camera.isSensitiveRoom) {
-        "This camera looks like it's in a private room. Privacy " +
-            "is on by default: no live view, and sensitive moments " +
-            "in clips are always censored."
+        "Detected automatically. No live view, and sensitive moments in clips are censored."
     } else {
-        "This camera is in a private room. Privacy is on: " +
-            "no live view, and sensitive moments in clips " +
-            "are always censored."
+        "No live view, and sensitive moments in clips are censored."
     },
 )
 

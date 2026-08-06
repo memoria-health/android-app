@@ -95,13 +95,7 @@ fun DetectorRow(
             CategoryIconTile(detector)
 
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(5.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(detector.name, style = NemaraType.bodySmallStrong, color = Ink)
-                    if (detector.source == Detector.Source.CUSTOM) BetaChip()
-                }
+                Text(detector.name, style = NemaraType.bodySmallStrong, color = Ink)
                 Text(
                     text = detector.description,
                     style = NemaraType.caption,
@@ -117,12 +111,6 @@ fun DetectorRow(
                 )
                 if (detector.showsAccuracyCaveat) {
                     AccuracyCaveatNotice(compact = true, modifier = Modifier.padding(top = 4.dp))
-                }
-                // A detector can be both custom AND fine-detail; the two
-                // notices answer different questions, so both may show.
-                if (detector.source == Detector.Source.CUSTOM) {
-                    CustomDetectorBetaNotice(
-                        compact = true, modifier = Modifier.padding(top = 4.dp))
                 }
             }
 

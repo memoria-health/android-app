@@ -101,6 +101,21 @@ fun PatientDetectorsScreen(
         // Both add buttons sit at the TOP, unlike the Cameras tab's single one
         // at the bottom: a patient can have 15+ detectors, and the Swift moved
         // these up so adding another does not mean scrolling past all of them.
+        // The BETA marker lives HERE and on the CUSTOM section header, not on
+        // each row. Per-row it repeated the same thing on every custom
+        // detector. iOS carries the identical treatment.
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.md),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            NemaraChip(text = "BETA", tone = NemaraChipTone.Terra)
+            Text(
+                text = "Custom detectors are new, so accuracy can vary.",
+                style = NemaraType.caption,
+                color = Ink3,
+            )
+        }
         NemaraButton(
             title = "Add a custom detector",
             variant = NemaraButtonVariant.Secondary,
@@ -214,6 +229,7 @@ private fun DetectorSections(
         )
         DetectorSection(
             title = "CUSTOM",
+            showsBeta = true,
             rows = state.customs,
             emptyHint = "None yet. Add a custom detector with the button above.",
             state = state,
@@ -240,6 +256,7 @@ private fun DetectorSections(
 private fun DetectorSection(
     title: String,
     rows: List<Detector>,
+    showsBeta: Boolean = false,
     emptyHint: String,
     state: PatientDetectorsState,
     onToggleDetector: (Detector, Boolean) -> Unit,
@@ -248,7 +265,14 @@ private fun DetectorSection(
     onLoadDoorConfigs: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-        NemaraEyebrow(text = title, modifier = Modifier.padding(horizontal = Spacing.md))
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = Spacing.md),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.xs),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            NemaraEyebrow(text = title)
+            if (showsBeta) NemaraChip(text = "BETA", tone = NemaraChipTone.Terra)
+        }
 
         if (rows.isEmpty()) {
             NemaraCard(
