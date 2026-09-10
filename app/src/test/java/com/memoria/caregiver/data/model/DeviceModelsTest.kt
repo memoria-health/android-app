@@ -656,9 +656,23 @@ class DeviceModelsTest {
     }
 
     @Test
-    fun `an unknown detector category fails the decode`() {
+    fun `an unknown detector category reads as UNKNOWN rather than failing`() {
+        // REVERSED on 2026-08-05, and the reversal is the point.
+        //
+        // This used to assert the decode THREW. That was written before
+        // `Category.UNKNOWN` existed. `38aea39` then added UNKNOWN and
+        // documented it as absorbing "a value from a newer server" — without
+        // enabling the coercion that would make it do so, and without updating
+        // this test. The old behaviour and the new comment contradicted each
+        // other, and the comment was the one people would read.
+        //
+        // The comment wins, because `category` is on Detector and on
+        // DetectionEvent, both of which load inside `bootstrap()`, which runs
+        // inside SIGN-IN. Throwing here means a fifth category added
+        // server-side locks every older client out of the app. Losing the
+        // colour on one row does not. FINDINGS.md F-44.
         val bad = detectorJson.replace("\"category\": \"safety\"", "\"category\": \"comfort\"")
-        assertThrows(SerializationException::class.java) { decodeDetector(bad) }
+        assertEquals(Detector.Category.UNKNOWN, decodeDetector(bad).category)
     }
 
     @Test

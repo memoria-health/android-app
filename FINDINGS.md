@@ -33,6 +33,64 @@ into a file — is the finding that matters most here.**
 
 ## OPEN
 
+### F-44 — `Category.UNKNOWN` documents a protection it does not provide
+**Data · Critical (latent) · FIX WRITTEN, NOT YET VERIFIED**
+
+`38aea39` added `Detector.Category.UNKNOWN` with this comment:
+
+> UNKNOWN absorbs a value from a newer server. Without it the whole response
+> fails to deserialize and the screen blanks, which is a far worse outcome than
+> one unfamiliar label.
+
+**It does not absorb anything.** kotlinx-serialization throws
+`does not contain element with name 'companionship'` unless the decoder is
+configured to coerce, and `NemaraJson` was not. Proved by test rather than
+inferred — the assertion message carries the exception.
+
+**Why it matters:** `category` is on both `Detector` and `DetectionEvent`, and
+both load inside `bootstrap()`, which runs inside **sign-in**. A fifth category
+added server-side would lock every older Android client out of the app. This is
+F-43 exactly, one field over — and F-43 was found the same way, by reading
+rather than by any failure this machine could produce.
+
+**Not broken today.** The backend enum is `safety | routine | behaviour | care`,
+which is what this build knows. The exposure is the next category, and the Care
+row is empty by design — so the next one is foreseeable.
+
+**Two truths were in the repo at once.** An older test,
+`an unknown detector category fails the decode`, pinned the throwing behaviour
+with no explanation; it predates `UNKNOWN`. The newer comment promised the
+opposite. The comment is the one a reader would believe, and it is also the
+correct behaviour on the sign-in path, so the test was reversed rather than the
+comment softened.
+
+**The fix:** `coerceInputValues = true` in `NemaraJson`, plus a default of
+`UNKNOWN` on the three `category` properties that lacked one — coercion needs
+somewhere to land. Noted honestly in the code: that flag also coerces an explicit
+`null` into a default for a non-nullable property, which hides a server sending
+null where it promised a value. Accepted for the reason iOS decodes tolerantly
+everywhere: on this path, degrading one field beats failing the whole response.
+
+**Status: unverified.** The full suite could not be run to confirm it. Another
+session is editing `ui/live/LiveVideoScreen.kt` concurrently and that file does
+not currently compile (`NemaraButtonSize`, `leadingSymbol`, `heightIn`
+unresolved), which fails the module build for reasons unrelated to this change.
+
+**Re-checked 2026-09-10, and that was not the real blocker.** `LiveVideoScreen.kt`
+was committed in `5c0b7cc` and is clean. The actual reason no Android test has
+ever been run on this machine is that **Gradle needs JVM 17+ and only JDK 15,
+13 and 8 are installed** — `/usr/libexec/java_home -V` lists no 17. So the build
+never starts, and every "unverified" status in this file that blames a compile
+error should be read as "the toolchain has never run here at all".
+
+**Outstanding:** install a JDK 17+ and run
+`./gradlew :app:testDebugUnitTest --tests '*DeviceModelsTest*' --tests '*CategoryPaletteTest*'`.
+Until then F-44's fix and both tests below are written, reviewed, and unproven.
+The fix and its tests are in the working tree, uncommitted, and need one clean
+run before they are trusted.
+
+---
+
 ### F-43 — Android had iOS's sign-in-killing decode bug, on six columns
 **Data · Critical · FIXED 2026-08-03**
 
